@@ -1,0 +1,23 @@
+services:
+  postgres:
+    image: postgres:16-alpine  # <-- используем легковесный образ PostgreSQL 16
+    container_name: effect_mobile_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app_user}           # <-- user из .env, дефолт: app_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app_password} # <-- пароль из .env, дефолт: app_password
+      POSTGRES_DB: ${POSTGRES_DB:-effect_mobile_db}       # <-- БД из .env, дефолт: effect_mobile_db
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app_user} -d ${POSTGRES_DB:-effect_mobile_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  postgres_data:

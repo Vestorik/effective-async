@@ -1,23 +1,24 @@
 from fastapi import FastAPI, APIRouter
 from contextlib import asynccontextmanager
-router = APIRouter(prefix="/api/v1")
+from app.src.api.handlers import api_router
+from fastapi_swagger_ui_theme import setup_swagger_ui_theme
 
 
-
-@router.get("/")
-async def check_endpoint():
-    return "aaaaaaa"
-
-__all_routers: list[APIRouter] = [router]
+__all_routers: list[APIRouter] = [api_router]
 
 
 async def startapp(app: FastAPI):
     if __all_routers:
         [app.include_router(router) for router in __all_routers]
-    
-    
-async def shutdown (app: FastAPI):
-    ...
+
+    setup_swagger_ui_theme(
+        app,
+        docs_path="/docs",
+    )
+
+
+async def shutdown(app: FastAPI): ...
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -25,4 +26,4 @@ async def lifespan(app: FastAPI):
         await startapp(app)
         yield
     finally:
-        await shutdown (app)
+        await shutdown(app)

@@ -8,6 +8,7 @@ dependencies = [
     "asyncpg>=0.31.0",
     "concurrent-log-handler>=0.9.29",
     "fastapi>=0.137.1",
+    "fastapi-swagger-ui-theme>=0.1.0",
     "passlib[argon2,bcrypt]>=1.7.4",
     "pydantic-settings>=2.14.2",
     "pyjwt>=2.13.0",

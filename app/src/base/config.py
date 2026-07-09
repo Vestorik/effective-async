@@ -49,6 +49,7 @@ class UvicornConfig(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        env_prefix="SERVER_"
     )
 
     host: str = Field(default="0.0.0.0", description="IP-адрес для привязки сервера.")
@@ -95,6 +96,9 @@ class UvicornConfig(BaseSettings):
         if v.lower() not in allowed:
             raise ValueError(f"log_level должен быть одним из: {allowed}")
         return v.lower()
+    
+   
+    
     
 # 🌟 Глобальный экземпляр конфигурации
 uvicorn_config = UvicornConfig()

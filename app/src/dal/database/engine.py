@@ -1,24 +1,126 @@
+from urllib.parse import quote_plus
+from pydantic import Field, computed_field, field_validator, model_validator
 from pathlib import Path
 from typing import Tuple
 import logging
 from sys import exit as sysexit
-from os import getenv
 from sqlalchemy.pool import StaticPool
-from sqlalchemy import URL, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     AsyncEngine,
     create_async_engine,
 )
-from dotenv import load_dotenv
-
-load_dotenv()
-
-logger = logging.getLogger(__name__)
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # состояние поддержки SQLite 
 SQLITE_SUPPORTED = False
+
+
+class PostgresDatabaseConfig(BaseSettings):
+    """
+    Конфигурация подключения к PostgreSQL-базе данных.
+
+    Собирает строку подключения из компонентов, валидирует параметры и
+    предоставляет метод `build_connection_url()` для получения готовой URL.
+
+    Использует переменные окружения с префиксом `POSTGRES_` (например, POSTGRES_HOST).
+
+    Атрибуты:
+        host: str — Хост сервера PostgreSQL (не пустой, валидный домен/IP)
+        port: int — Порт (1–65535)
+        user: str — Имя пользователя (не пустой)
+        password: str | None — Пароль (может быть пустым в dev-средах)
+        db_name: str — Имя базы данных (не пустой)
+        pool_size: int — Размер пула соединений (по умолчанию 10)
+        pool_timeout: int — Таймаут получения соединения из пула (по умолчанию 30)
+        max_overflow: int — Максимальное количество дополнительных соединений при перегрузке (по умолчанию 20)
+        pool_pre_ping: bool — Проверка соединения перед использованием (по умолчанию True)
+        pool_recycle: int — Время жизни соединения до пересоздания (по умолчанию 3600 сек)
+        echo: bool — Логировать SQL-запросы (по умолчанию False)
+
+    Возвращаемое значение метода `connection_url`:
+        str — Готовая строка подключения, например:
+        postgresql+asyncpg://user:pass@host:5432/db
+
+    Возможные исключения:
+        ValueError: если не пройдёт валидация (например, пустой `host`)
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        env_prefix="POSTGRES_",  
+    )
+    
+
+    host: str = Field(..., alias="HOST", min_length=1, exclude=True)       
+    port: int = Field(..., alias="PORT", ge=1, le=65535, exclude=True)     
+    user: str = Field(..., alias="USER", min_length=1, exclude=True)      
+    password: str | None = Field(default=None, alias="PASSWORD", exclude=True)  
+    db_name: str = Field(..., alias="DB", min_length=1, exclude=True)  
+
+    # optional
+    echo: bool = Field(default=False, alias="ECHO")    
+    max_overflow: int = Field(default=20, alias="MAX_OVERFLOW", ge=0) 
+    pool_pre_ping: bool = Field(default=True, alias="POOL_PRE_PING") 
+    pool_recycle: int = Field(default=3600, alias="POOL_RECYCLE", ge=0) 
+    pool_size: int = Field(default=10, alias="POOL_SIZE", ge=1)
+    pool_timeout: int = Field(default=30, alias="POOL_TIMEOUT", ge=1)
+
+    @computed_field
+    @property
+    def connection_url(self) -> str:
+        """Собирает строку подключения к PostgreSQL.
+
+        Внимание: если `password` равен `None`, он не включается в URL.
+
+        Возвращает:
+            str — готовая строка подключения, например:
+                postgresql+asyncpg://user:password@host:5432/db
+        """
+        # ✅ Важно: используем quote_plus, чтобы безопасно кодировать спецсимволы в пароле
+        password_part = ""
+        if self.password:
+            password_part = f":{quote_plus(self.password)}"
+
+        return f"postgresql+asyncpg://{self.user}{password_part}@{self.host}:{self.port}/{self.db_name}"
+
+    @field_validator("host")
+    @classmethod
+    def _validate_host(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Поле `host` не должно быть пустым")
+        return v.strip()
+
+    @field_validator("db_name")
+    @classmethod
+    def _validate_db_name(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Поле `db_name` не должно быть пустым")
+        return v.strip()
+
+    @field_validator("user")
+    @classmethod
+    def _validate_user(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Поле `user` не должно быть пустым")
+        return v.strip()
+
+    @model_validator(mode="after")
+    def _validate_after(self) -> PostgresDatabaseConfig:
+        """Дополнительная проверка: пароль не должен быть логином."""
+        if self.password is not None and self.password == self.user:
+            logger.warning(
+                "Пароль совпадает с именем пользователя (POSTGRES_PASSWORD=POSTGRES_USER). "
+                "Это может быть уязвимостью. Рассмотрите изменение пароля."
+            )
+        return self
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_session_maker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
@@ -54,7 +156,7 @@ def create_session_maker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession
     return session_maker
 
 
-def create_postgre_engine(database_url: str | URL) -> AsyncEngine:
+def create_postgre_engine(db_config: PostgresDatabaseConfig) -> AsyncEngine:
     """Создаёт асинхронный движок SQLAlchemy для подключения к PostgreSQL.
 
     Функция инициализирует движок с оптимизированными настройками пула соединений,
@@ -94,16 +196,11 @@ def create_postgre_engine(database_url: str | URL) -> AsyncEngine:
         Убедитесь, что сервер PostgreSQL доступен по указанному адресу
         и что зависимости `asyncpg` и `sqlalchemy[asyncio]` установлены.
     """
+
+    database_url = db_config.connection_url
+    
     logger.info("Попытка подключения к базе данных PostgreSQL")
-    postgre_engine: AsyncEngine = create_async_engine(
-        database_url,
-        echo=False,
-        pool_size=10,
-        max_overflow=20,
-        pool_pre_ping=True,
-        pool_recycle=3600,
-        pool_timeout=30,
-    )
+    postgre_engine: AsyncEngine = create_async_engine(database_url, **db_config.model_dump())
     return postgre_engine
 
 
@@ -140,8 +237,7 @@ def create_sqlite_engine() -> AsyncEngine:
         production-средах.
         - Рекомендуется включать только как fallback-решение.
     """
-    path_to_file = Path(__file__).resolve().parent
-    path_database = path_to_file / "data" / ".database.db"
+    path_database = Path(__file__).resolve().parent / "data" / ".database.db"
     SQLITE_DATABASE_URL = f"sqlite+aiosqlite:///{path_database}"
     logger.info("Попытка подключения к базе данных Sqlite")
     sqlite_engine: AsyncEngine = create_async_engine(
@@ -154,7 +250,7 @@ def create_sqlite_engine() -> AsyncEngine:
     return sqlite_engine
 
 
-async def start_engine(data_base_url: str | None= None) -> Tuple[AsyncEngine, async_sessionmaker[AsyncSession]]:
+async def start_engine(database_config: PostgresDatabaseConfig | None = None) -> Tuple[AsyncEngine, async_sessionmaker[AsyncSession]]:
     """Инициализирует и запускает асинхронный движок базы данных с поддержкой fallback-режима.
 
     Функция пытается подключиться к основной базе данных (PostgreSQL) по URL из переменной
@@ -234,25 +330,21 @@ async def start_engine(data_base_url: str | None= None) -> Tuple[AsyncEngine, as
             logger.critical("Подключение к БД не возможно. Завершение работы")
             sysexit(1)
 
-    DATABASE_URL: str | None = data_base_url or getenv("DATABASE_URL")
-    logger.info("Получение DATABASE_URL из переменных окружения: %s", DATABASE_URL)
-    if DATABASE_URL is None:
-        logger.warning("DATABASE_URL не задан в переменных окружения",)
+
+
+    db_config: PostgresDatabaseConfig = database_config or PostgresDatabaseConfig()
+    logger.info("Получение DATABASE_URL из переменных окружения",)
+    
+
+    engine: AsyncEngine = create_postgre_engine(db_config)
+    if await test_connection(engine):
+        logger.info("Подключение к PostgreSQL успешно")
+    else:
+        logger.warning("PostgreSQL недоступен. Переключение на SQLite.")
         if SQLITE_SUPPORTED:
             engine = await check_sqlite()
         else: 
-            raise Exception("DATABASE_URL не задан в переменных окружения, поддержка sqlite отключена")
-            
-    else:
-        engine: AsyncEngine = create_postgre_engine(DATABASE_URL)
-        if await test_connection(engine):
-            logger.info("Подключение к PostgreSQL успешно")
-        else:
-            logger.warning("PostgreSQL недоступен. Переключение на SQLite.")
-            if SQLITE_SUPPORTED:
-                engine = await check_sqlite()
-            else: 
-                raise Exception("PostgreSQL недоступен, поддержка sqlite отключена")
+            raise Exception("PostgreSQL недоступен, поддержка sqlite отключена")
 
     session_maker: async_sessionmaker[AsyncSession] = create_session_maker(engine)
 

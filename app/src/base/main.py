@@ -6,18 +6,14 @@ import uvicorn
 
 def create_app() -> FastAPI:
 
-    swagger_ui_parameters = {
-            "syntaxHighlight.theme": "arta",  # Популярная тёмная тема: "arta", "obsidian", "dracula", "monokai"
-        }
 
     app = FastAPI(
             title="Buisenss Manage App",
             description="Сервис управления бизнес-процессами",
             version="1.0.0",
-            docs_url="/docs",
+            docs_url=None,
             redoc_url="/redoc",
             lifespan=lifespan,
-            swagger_ui_parameters=swagger_ui_parameters,
         )
     return app
 
