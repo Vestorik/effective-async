@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
 from sqlalchemy.orm import DeclarativeBase, selectinload
-from datetime import datetime
 from typing import Optional, Sequence, Tuple, TypeVar, Generic
 from uuid import UUID
 from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.src.dal.models import UserModel, TeamModel, ProjectModel, TaskExecutorModel, TaskModel, MeetingModel, EventModel, team_project_table
+from app.src.dal.database.models import UserModel, TeamModel, ProjectModel, TaskExecutorModel, TaskModel, MeetingModel, EventModel, team_project_table
+
 
 ModelType = TypeVar("ModelType", bound=DeclarativeBase)
 
@@ -243,7 +243,8 @@ class TeamRepository(BaseRepository):
         - get_by_name: получить команду по названию.
     """
 
-    model = TeamModel
+    def __init__(self, session: AsyncSession):
+        super().__init__(session, TeamModel) 
 
     async def get_by_name(self, name: str) -> TeamModel | None:
         stmt = select(self.model).where(self.model.name == name)
@@ -262,7 +263,9 @@ class ProjectRepository(BaseRepository):
         - get_users_for_project: получить всех пользователей, связанных с проектом (через команды и исполнителей задач).
     """
 
-    model = ProjectModel
+    def __init__(self, session: AsyncSession):
+        super().__init__(session, ProjectModel) 
+
 
     async def get_by_name(self, name: str) -> ProjectModel | None:
         stmt = select(self.model).where(self.model.name == name)
@@ -318,7 +321,9 @@ class TaskRepository(BaseRepository):
         - get_parent_task: получить родительскую задачу для подзадачи.
     """
 
-    model = TaskModel
+    def __init__(self, session: AsyncSession):
+        super().__init__(session, TaskModel) 
+
 
     async def get_by_project_id(self, project_id: UUID) -> Sequence[TaskModel]:
         stmt = select(self.model).where(self.model.project_id == project_id)
@@ -356,7 +361,9 @@ class TaskExecutorRepository(BaseRepository):
         - get_tasks_for_user: получить все задачи пользователя.
     """
 
-    model = TaskExecutorModel
+    def __init__(self, session: AsyncSession):
+        super().__init__(session, TaskExecutorModel) 
+
 
     async def get_by_task_and_user(self, task_id: UUID, user_id: UUID) -> TaskExecutorModel | None:
         stmt = select(self.model).where(
@@ -393,8 +400,10 @@ class TaskExecutorRepository(BaseRepository):
 
 
 class MeetingRepository(BaseRepository):
-    model = MeetingModel
+    def __init__(self, session: AsyncSession):
+        super().__init__(session, model=MeetingModel) 
 
 
 class EventRepository(BaseRepository):
-    model = EventModel
+    def __init__(self, session: AsyncSession):
+        super().__init__(session, model=EventModel) 

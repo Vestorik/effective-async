@@ -1,4 +1,3 @@
-from operator import index
 from datetime import datetime, timezone
 from enum import Enum
 from logging import getLogger
