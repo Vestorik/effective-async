@@ -1,46 +1,79 @@
-from fastapi import APIRouter, Query, BackgroundTasks
-from email.header import Header
+# app/src/api/handlers.py
+from fastapi import APIRouter, Query, BackgroundTasks, Depends, Path, status
 from asyncio import sleep as asleep
 from pydantic import BaseModel, Field
-from fastapi import Depends
-from fastapi.exceptions import HTTPException
 from typing import Annotated
+from datetime import date, datetime
+from uuid import UUID
 
 
 api_router = APIRouter()
 
-async def mail(email):
-    await asleep(5)
-    print(f"{email} получил сообщение")
 
-@api_router.get("/")
-async def root():
-    return {"message": "Hello World"}
+@api_router.post("/auth/register")
+async def auth_register():
+    ...
 
+@api_router.post("/auth/login")
+async def auth_login():
+    ...
 
-class User(BaseModel):
-    name: str = Field(min_length=3)
-    age: int = Field(ge=18, le=100)
-    email: str
+@api_router.get("/users/me")
+async def get_user_profile():
+    ...
 
-    
-@api_router.post('/registry/')
-async def registry_handler(user: User, back_task: BackgroundTasks):
-    back_task.add_task(mail, user.email)
-    return "Пользователь {user.name} успешно зарегестрирован"
+@api_router.post("/teams")
+async def create_team():
+    ...
 
+@api_router.post("/teams/{id}/join")
+async def join_team():
+    ...
 
-def check_token(token: Annotated[str, Header] | None = None, 
-                token2: Annotated[str, Query] | None = None) -> str | None:
-    base_tocken = "aaa"
-    
-    current_token = token or token2
-    
-    if base_tocken == current_token: 
-        return token
-    raise HTTPException(status_code=403, detail="Токен не действитилен")
+@api_router.get("/teams/{id}/members")
+async def get_team_members():
+    ...
 
+@api_router.post("/teams/{id}/tasks")
+async def create_task():
+    ...
 
-@api_router.get('/sicret_data/')
-async def sicret_data(tok_valid: str = Depends(check_token)):
-    return {"message":"доступ разрешен"}
+@api_router.get("/teams/{id}/tasks")
+async def list_tasks():
+    ...
+
+@api_router.put("/teams/{id}/tasks/{task_id}")
+async def update_task():
+    ...
+
+@api_router.delete("/teams/{id}/tasks/{task_id}")
+async def delete_task():
+    ...
+
+@api_router.post("/tasks/{id}/comments")
+async def add_task_comment():
+    ...
+
+@api_router.post("/tasks/{id}/evaluation")
+async def evaluate_task():
+    ...
+
+@api_router.post("/teams/{id}/meetings")
+async def create_meeting():
+    ...
+
+@api_router.get("/teams/{id}/meetings")
+async def list_meetings():
+    ...
+
+@api_router.put("/teams/{id}/meetings/{meeting_id}")
+async def update_meeting():
+    ...
+
+@api_router.delete("/teams/{id}/meetings/{meeting_id}")
+async def delete_meeting():
+    ...
+
+@api_router.get("/calendar")
+async def get_calendar_events():
+    ...

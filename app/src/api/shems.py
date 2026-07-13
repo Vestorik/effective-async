@@ -1,7 +1,9 @@
 from datetime import datetime
 from uuid import UUID
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, field_validator
 from typing import Optional, List
+from app.src.utils import check_time_range
+
 
 
 class BaseModelSheme(BaseModel):
@@ -72,6 +74,21 @@ class UserCreateSheme(UserBaseSheme):
     """
 
     password: str = Field(min_length=8, max_length=50, description="Открытый пароль (не сохраняется в базе).")
+    
+class UserUpdateSheme(BaseModelSheme):
+    """
+    Схема обновления пользователя.
+
+    Используется для PATCH /users/{id}.
+    Все поля опциональны, чтобы обновлять только нужные.
+    Пароль не поддерживается в обновлении через эту схему (можно добавить отдельно).
+    """
+
+    username: Optional[str] = Field(default=None, min_length=2, max_length=50)
+    email: Optional[EmailStr] = None
+    role: Optional[str] = None
+    team_id: Optional[UUID] = Field(default=None, description="Внешний ключ на команду (необязательный).")
+
 
 
 class UserSheme(UserBaseSheme):
@@ -188,10 +205,51 @@ class EventSheme(TimeEventSheme):
     id: UUID
     created_at: datetime
     updated_at: datetime
+    
+    
+
+class EventCreate(BaseModel):
+    """
+    Схема создания события (дедлайн, напоминание).
+    """
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = Field(default=None, max_length=512)
+    start_datetime: datetime
+    end_datetime: datetime
+
+    @field_validator("end_datetime")
+    @classmethod
+    def validate_end_after_start(cls, v: datetime, info) -> datetime:
+        start = info.data.get("start_datetime")
+        try:
+            check_time_range(start, v)
+        except ValueError as e:
+            raise ValueError(f"Ошибка валидации времени: {e}")
+        return v
 
 
+class MeetingCreate(BaseModel):
+    """
+    Схема создания встречи.
+    """
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = Field(default=None, max_length=512)
+    start_datetime: datetime
+    end_datetime: datetime
+
+    @field_validator("end_datetime")
+    @classmethod
+    def validate_end_after_start(cls, v: datetime, info) -> datetime:
+        start = info.data.get("start_datetime")
+        try:
+            check_time_range(start, v)
+        except ValueError as e:
+            raise ValueError(f"Ошибка валидации времени: {e}")
+        return v
+    
 # 🔁 Ручное исправление циклической зависимости для вложенных схем
 # (Pydantic v2 не поддерживает forward-ссылки в моделях-наследниках)
 TeamWithUsersSheme.model_rebuild()
 TeamWithProjectsSheme.model_rebuild()
 TaskWithExecutorsSheme.model_rebuild()
+

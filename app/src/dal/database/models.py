@@ -5,7 +5,7 @@ from uuid import uuid4, UUID
 from passlib.context import CryptContext
 from sqlalchemy import (
     DateTime,
-    String, PrimaryKeyConstraint,
+    String, PrimaryKeyConstraint, DDL, event
 )
 from typing import Optional
 from sqlalchemy import Table, Column, ForeignKey, Integer
@@ -294,3 +294,57 @@ class MeetingModel(BaseModel, TimeEvent):
 
 class EventModel(BaseModel, TimeEvent):
     __tablename__ = "events"
+    
+def check_time_range_ddl(table_name: str) -> DDL:
+    """
+    Генерирует SQL-триггер для проверки start_datetime < end_datetime.
+
+    Пример для таблицы events:
+        CREATE OR REPLACE FUNCTION check_events_time_range()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            IF NEW.end_datetime <= NEW.start_datetime THEN
+                RAISE EXCEPTION 'end_datetime должен быть строго после start_datetime';
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        DROP TRIGGER IF EXISTS trig_events_time_range ON events;
+        CREATE TRIGGER trig_events_time_range
+            BEFORE INSERT OR UPDATE ON events
+            FOR EACH ROW
+            EXECUTE FUNCTION check_events_time_range();
+    """
+    func_name = f"check_{table_name}_time_range"
+    trigger_name = f"trig_{table_name}_time_range"
+
+    return DDL(f"""
+        CREATE OR REPLACE FUNCTION {func_name}()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            IF NEW.end_datetime <= NEW.start_datetime THEN
+                RAISE EXCEPTION 'end_datetime должен быть строго после start_datetime';
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        DROP TRIGGER IF EXISTS {trigger_name} ON {table_name};
+        CREATE TRIGGER {trigger_name}
+            BEFORE INSERT OR UPDATE ON {table_name}
+            FOR EACH ROW
+            EXECUTE FUNCTION {func_name}();
+    """)
+
+# === Применение триггеров ===
+event.listen(
+    EventModel.__table__,
+    "before_create",
+    check_time_range_ddl("events")
+)
+event.listen(
+    MeetingModel.__table__,
+    "before_create",
+    check_time_range_ddl("meetings")
+)

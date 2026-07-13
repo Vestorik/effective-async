@@ -348,6 +348,28 @@ class TaskRepository(BaseRepository):
         stmt = select(self.model).where(self.model.id == task_id).options(selectinload(self.model.parent))
         result = await self.session.scalars(stmt)
         return result.first()
+    
+    async def get_tasks_by_team_and_priority(
+        self,
+        team_id: UUID,
+        priority: Optional[str] = None,
+    ) -> Sequence[TaskModel]:
+        """
+        Получает задачи команды с опциональной фильтрацией по приоритету.
+
+        Аргументы:
+            team_id (UUID): ID команды.
+            priority (Optional[str]): Фильтр по приоритету (low, medium, high).
+
+        Возвращает:
+            Sequence[TaskModel]: Список задач.
+        """
+        stmt = select(self.model).where(self.model.team_id == team_id)
+        if priority:
+            stmt = stmt.where(self.model.priority == priority)
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
 
 
 class TaskExecutorRepository(BaseRepository):

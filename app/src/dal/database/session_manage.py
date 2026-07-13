@@ -35,17 +35,17 @@
 
 
 
-2. Фоновая задача с retry:   
+2. Фоновая задача с retry:
 async def daily_cleanup(db_session_maker: async_sessionmaker[AsyncSession]):
     async with session_transaction(db_session_maker, max_retries=3) as session:
         expired = await SomeRepository(session).get_expired()
         for item in expired:
             await session.delete(item)
-        await session.commit()  
-       
-        
-        
-3.Обработка ошибок:     
+        await session.commit()
+
+
+
+3.Обработка ошибок:
 async def process_user_event(db_session_maker: async_sessionmaker[AsyncSession], user_id: UUID):
     try:
         async with session_transaction(db_session_maker) as session:
@@ -55,18 +55,33 @@ async def process_user_event(db_session_maker: async_sessionmaker[AsyncSession],
     except OperationalError as ex:
         logger.error("Не удалось обработать событие для пользователя %s: %s", user_id, ex)
         raise
-           
+
 """
 
-from tenacity import AsyncRetrying, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import (
+    AsyncRetrying,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, AsyncEngine
 from logging import getLogger
 from typing import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from app.src.dal.database.repositories import UserRepository, TeamRepository, ProjectRepository, TaskRepository, TaskExecutorRepository, MeetingRepository, EventRepository
+from app.src.dal.database.repositories import (
+    UserRepository,
+    TeamRepository,
+    ProjectRepository,
+    TaskRepository,
+    TaskExecutorRepository,
+    MeetingRepository,
+    EventRepository,
+)
+
 logger = getLogger(__name__)
+
 
 @asynccontextmanager
 async def session_transaction(
@@ -124,7 +139,7 @@ async def session_transaction(
                 await send_report(stats)
     """
     session_factory = session_maker
-    
+
     # Определяем, какие ошибки стоит повторять
     retry_strategy = AsyncRetrying(
         stop=stop_after_attempt(max_retries),
@@ -151,7 +166,6 @@ async def session_transaction(
             try:
                 await session.rollback()
             except Exception as rb_ex:
-            
                 logger.error("Ошибка при выполнении rollback: %s", rb_ex, exc_info=True)
 
             # Логируем только нечувствительные данные
@@ -316,12 +330,10 @@ class DataBaseManager:
 
     __session_maker: async_sessionmaker
     __data_base_engine: AsyncEngine
-    
+
     def __init__(self, session_maker: async_sessionmaker, engine: AsyncEngine):
         self.__session_maker: async_sessionmaker = session_maker
         self.__data_base_engine: AsyncEngine = engine
 
-    
     async def uof(self) -> UnitOfWork:
         return UnitOfWork(self.__session_maker)
-    
