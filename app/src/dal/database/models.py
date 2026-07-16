@@ -1,17 +1,96 @@
+"""
+Модуль ORM-моделей для бизнес-управления (BMA).
+
+Назначение:
+    Предоставляет SQLAlchemy-модели для хранения сущностей системы:
+    - Пользователи (UserModel), команды (TeamModel), проекты (ProjectModel),
+      задачи (TaskModel), исполнители задач (TaskExecutorModel),
+      встречи (MeetingModel), события (EventModel).
+    - Реализует общие поля (id, created_at, updated_at) через абстрактную базовую модель.
+    - Использует UUID как тип primary key, включает поддержку UTC-дат.
+
+Архитектура:
+    - BaseModel: абстрактный базовый класс для всех моделей.
+    - TimeEventMixin: класс-миксин для моделей с временными рамками (start_datetime, end_datetime).
+    - Модели связанные: TeamModel ↔ UserModel (1:N), ProjectModel ↔ TeamModel (M:N),
+      ProjectModel ↔ TaskModel (1:N), TaskModel ↔ TaskExecutorModel (1:N),
+      TaskModel ↔ UserModel (через TaskExecutorModel, M:N).
+
+Ключевые принципы:
+    - DRY: общие поля вынесены в BaseModel.
+    - KISS: простые, понятные модели без лишней абстракции.
+    - Composition over Inheritance: связи реализованы через relationship(), а не множественное наследование.
+    - Twelve-Factor App: настройки БД вынесены в переменные окружения (не в код).
+    - SOLID: соблюдение принципов Single Responsibility и Dependency Inversion.
+
+Типы данных:
+    - id: UUID (SQL_UUID(as_uuid=True)), генерируется client-side через uuid4.
+    - datetime: DateTime(timezone=True) — сохраняется в UTC с учетом временных зон.
+    - Временные ограничения: start_datetime и end_datetime проверяются на уровне БД через PostgreSQL-триггеры.
+
+Поля моделей:
+    - BaseModel: id (UUID), created_at (datetime), updated_at (datetime).
+    - TimeEvent: start_datetime (datetime), end_datetime (datetime).
+    - UserModel: username (str), email (str, unique), role (str, enum), hashed_password (str).
+    - TeamModel: name (str).
+    - ProjectModel: name (str, unique), description (str | None).
+    - TaskModel: name (str), description (str | None), parent_id (UUID | None, self-reference).
+    - TaskExecutorModel: user_id, task_id (composite primary key), estimate (int | None).
+    - MeetingModel, EventModel: наследуют TimeEvent.
+
+Связи:
+    - 1:1: UserModel.team — один пользователь в одной команде.
+    - 1:N: TeamModel.users, ProjectModel.project_tasks, TaskModel.executors.
+    - M:N: TeamModel ↔ ProjectModel (через team_project_table).
+    - Самоссылка: TaskModel.parent/sub_tasks — вложенность задач.
+
+Валидация и безопасность:
+    - Уникальность email в UserModel.
+    - Хэширование паролей через bcrypt (passlib).
+    - Проверка временных интервалов (start_datetime < end_datetime) через PostgreSQL-триггеры для EventModel, MeetingModel.
+    - Каскадное удаление: sub_tasks, project_tasks, task_executors удаляются при удалении родителя.
+
+Ограничения:
+    - PostgreSQL-специфичные типы (SQL_UUID, DateTime(timezone=True)) требуют PostgreSQL ≥ 9.6.
+    - Триггеры для TimeEvent-моделей не проверяют временные зоны — сравнение происходит в UTC.
+    - Имена моделей и полей — в стиле snake_case (PEP 8).
+
+Применение:
+    - Основной слой ORM для работы с БД через репозитории.
+    - Используется в слое DAL (Data Access Layer) и сервисах.
+    - Все модели поддерживают CRUD-операции через ORM-сессию.
+
+Примеры:
+    # Создание пользователя
+    user = UserModel(username="alex", email="alex@example.com", role="user")
+    user.set_password("secure_password")
+    session.add(user)
+    await session.commit()
+
+    # Создание команды с пользователями
+    team = TeamModel(name="Dev Team")
+    user.team = team
+    session.add(team)
+    await session.commit()
+
+    # Создание задачи с исполнителем
+    task = TaskModel(name="Fix bug", description="Critical issue in auth")
+    executor = TaskExecutorModel(user=user, task=task, estimate=8)
+    session.add(task)
+    await session.commit()
+"""
+
+from __future__ import annotations
 from datetime import datetime, timezone
 from enum import Enum
 from logging import getLogger
 from uuid import uuid4, UUID
 from passlib.context import CryptContext
-from sqlalchemy import (
-    DateTime,
-    String, PrimaryKeyConstraint, DDL, event
-)
+from sqlalchemy import DateTime, String, PrimaryKeyConstraint, DDL, event
 from typing import Optional
 from sqlalchemy import Table, Column, ForeignKey, Integer
 from sqlalchemy.orm import relationship, mapped_column, Mapped
 from sqlalchemy.dialects.postgresql import UUID as SQL_UUID
-
 
 from sqlalchemy.orm import DeclarativeBase
 
@@ -55,7 +134,7 @@ class BaseModel(DeclarativeBase):
     )
 
 
-class TimeEvent(DeclarativeBase):
+class TimeEventMixin:
     __abstract__ = True
 
     start_datetime: Mapped[datetime] = mapped_column(
@@ -150,12 +229,12 @@ class UserModel(BaseModel):
         nullable=True,
         comment="Внешний ключ на команду (1:N, пользователь в одной команде).",
     )
-    team: Mapped[Optional[TeamModel]] = relationship(
+    team: Mapped[Optional["TeamModel"]] = relationship(
         back_populates="users",
         lazy="joined",
         uselist=False,  # <-- 1:1 для пользователя
     )
-    task_executors: Mapped[list[TaskExecutorModel]] = relationship(
+    task_executors: Mapped[list["TaskExecutorModel"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
     )
@@ -165,23 +244,28 @@ team_project_table = Table(
     "team_projects",
     BaseModel.metadata,
     Column("team_id", SQL_UUID(as_uuid=True), ForeignKey("teams.id"), primary_key=True),
-    Column("project_id", SQL_UUID(as_uuid=True), ForeignKey("projects.id"), primary_key=True),
+    Column(
+        "project_id",
+        SQL_UUID(as_uuid=True),
+        ForeignKey("projects.id"),
+        primary_key=True,
+    ),
 )
 
 
 class TeamModel(BaseModel):
     __tablename__ = "teams"
-    
+
     name: Mapped[str] = mapped_column(String(255), nullable=False)
 
     # 1:n один пользователь одна комманда, в комманде много пользователей
-    users: Mapped[list[UserModel]] = relationship(
+    users: Mapped[list["UserModel"]] = relationship(
         back_populates="team",
         lazy="joined",
     )
 
     # n:m у команды много проектов, в 1 проекте может быть несколько команд
-    team_projects: Mapped[list[ProjectModel]] = relationship(
+    team_projects: Mapped[list["ProjectModel"]] = relationship(
         secondary=team_project_table,
         back_populates="project_teams",
         lazy="joined",
@@ -192,23 +276,24 @@ class ProjectModel(BaseModel):
     __tablename__ = "projects"
 
     name: Mapped[str] = mapped_column(
-        String(255), nullable=False, comment="Название проекта.", unique=True,
+        String(255),
+        nullable=False,
+        comment="Название проекта.",
+        unique=True,
     )
     description: Mapped[Optional[str]] = mapped_column(
         String(512), nullable=True, comment="Описание проекта."
     )
 
     # n:m у команды много проектов, в 1 проекте может быть несколько команд
-    project_teams: Mapped[list[TeamModel]] = (
-        relationship( 
-            secondary=team_project_table,
-            back_populates="team_projects",
-        )
+    project_teams: Mapped[list["TeamModel"]] = relationship(
+        secondary=team_project_table,
+        back_populates="team_projects",
     )
 
     # 1:n У проекта много задач, у задач один проект
-    project_tasks: Mapped[list[TaskModel]] = relationship(
-        back_populates="project", 
+    project_tasks: Mapped[list["TaskModel"]] = relationship(
+        back_populates="project",
         cascade="all, delete-orphan",
     )
 
@@ -220,44 +305,50 @@ class TaskModel(BaseModel):
     description: Mapped[str] = mapped_column(String(512), nullable=True)
 
     #  sub tasks
-    parent_id: Mapped[UUID | None] = mapped_column(
+    parent_id: Mapped[Optional[UUID]] = mapped_column(
         ForeignKey("tasks.id"),
         nullable=True,
         index=True,
     )
-    parent: Mapped[TaskModel | None] = relationship(
+    parent: Mapped[Optional["TaskModel"]] = relationship(
         "TaskModel",
         remote_side=[parent_id],
         back_populates="sub_tasks",
     )
-    sub_tasks: Mapped[list[TaskModel]] = relationship(
+    sub_tasks: Mapped[list["TaskModel"]] = relationship(
         "TaskModel",
         back_populates="parent",
         cascade="all, delete-orphan",
     )
 
-    #  relationships
-    executors: Mapped[list[TaskExecutorModel]] = relationship(
-        back_populates="task", cascade="all, delete-orphan", lazy="joined",
+    executors: Mapped[Optional[list["TaskExecutorModel"]]] = relationship(
+        back_populates="task",
+        cascade="all, delete-orphan",
+        lazy="joined",
     )
 
-    project_id: Mapped[UUID] = mapped_column(
+    project_id: Mapped[Optional[UUID]] = mapped_column(
         SQL_UUID(as_uuid=True),
         ForeignKey("projects.id"),
         nullable=True,
         index=True,
         comment="Внешний ключ на проект (1:N).",
     )
-    project: Mapped[Optional[ProjectModel]] = relationship(
+    project: Mapped[Optional["ProjectModel"]] = relationship(
         back_populates="project_tasks",
     )
 
 
 class TaskExecutorModel(BaseModel):
     __tablename__ = "task_executors"
-    __table_args__ = (
-    PrimaryKeyConstraint('user_id', 'task_id'),
-)
+    __table_args__ = (PrimaryKeyConstraint("user_id", "task_id"),)
+
+    id: Mapped[None] = mapped_column(
+        SQL_UUID(as_uuid=True),
+        primary_key=False,
+        nullable=True,      
+        comment="Не используется (для совместимости с BaseModel).",
+    )
 
     #  Main field
     estimate: Mapped[int] = mapped_column(
@@ -266,7 +357,7 @@ class TaskExecutorModel(BaseModel):
 
     user_id: Mapped[UUID] = mapped_column(
         SQL_UUID(as_uuid=True),
-        ForeignKey('users.id'),
+        ForeignKey("users.id"),
         nullable=False,
         comment="Внешний ключ на пользователя (обязательный, исполнитель).",
     )
@@ -277,7 +368,7 @@ class TaskExecutorModel(BaseModel):
 
     task_id: Mapped[UUID] = mapped_column(
         SQL_UUID(as_uuid=True),
-        ForeignKey('tasks.id'),
+        ForeignKey("tasks.id"),
         nullable=False,
         comment="Внешний ключ на задачу (обязательный, задача исполнителя).",
     )
@@ -287,14 +378,14 @@ class TaskExecutorModel(BaseModel):
     )
 
 
-
-class MeetingModel(BaseModel, TimeEvent):
+class MeetingModel(BaseModel, TimeEventMixin):
     __tablename__ = "meetings"
 
 
-class EventModel(BaseModel, TimeEvent):
+class EventModel(BaseModel, TimeEventMixin):
     __tablename__ = "events"
-    
+
+
 def check_time_range_ddl(table_name: str) -> DDL:
     """
     Генерирует SQL-триггер для проверки start_datetime < end_datetime.
@@ -337,14 +428,7 @@ def check_time_range_ddl(table_name: str) -> DDL:
             EXECUTE FUNCTION {func_name}();
     """)
 
+
 # === Применение триггеров ===
-event.listen(
-    EventModel.__table__,
-    "before_create",
-    check_time_range_ddl("events")
-)
-event.listen(
-    MeetingModel.__table__,
-    "before_create",
-    check_time_range_ddl("meetings")
-)
+event.listen(EventModel.__table__, "before_create", check_time_range_ddl("events"))
+event.listen(MeetingModel.__table__, "before_create", check_time_range_ddl("meetings"))

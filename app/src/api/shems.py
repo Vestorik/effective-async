@@ -2,7 +2,7 @@ from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel, Field, EmailStr, field_validator
 from typing import Optional, List
-from app.src.utils import check_time_range
+from app.src.base.utils import check_time_range
 
 
 

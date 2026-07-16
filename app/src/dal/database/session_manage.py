@@ -69,7 +69,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, AsyncEngine
 from logging import getLogger
 from typing import AsyncGenerator
 from contextlib import asynccontextmanager
-
 from app.src.dal.database.repositories import (
     UserRepository,
     TeamRepository,
@@ -259,17 +258,11 @@ class UnitOfWork:
                     await uow.users.create(user)
                     # commit() при выходе из async with
     """
-
+    
+    
     def __init__(self, session_maker: async_sessionmaker):
         self._session_maker = session_maker
-        self.session: AsyncSession | None = None
-        self.users: UserRepository | None = None
-        self.teams: TeamRepository | None = None
-        self.projects: ProjectRepository | None = None
-        self.tasks: TaskRepository | None = None
-        self.task_executors: TaskExecutorRepository | None = None
-        self.meetings: MeetingRepository | None = None
-        self.events: EventRepository | None = None
+
 
     async def __aenter__(self) -> "UnitOfWork":
         self.session = self._session_maker()
@@ -334,6 +327,10 @@ class DataBaseManager:
     def __init__(self, session_maker: async_sessionmaker, engine: AsyncEngine):
         self.__session_maker: async_sessionmaker = session_maker
         self.__data_base_engine: AsyncEngine = engine
-
-    async def uof(self) -> UnitOfWork:
+    
+    def uow(self) -> UnitOfWork:
         return UnitOfWork(self.__session_maker)
+
+    @property
+    def get_engine(self):
+        return self.__data_base_engine 

@@ -1,3 +1,73 @@
+"""
+Модуль управления асинхронными подключениями к базе данных и инициализации движка SQLAlchemy.
+
+Назначение:
+    Предоставляет централизованный механизм инициализации асинхронных подключений к
+    PostgreSQL/SQLite с автоматическим fallback-переключением, валидацией конфигурации
+    и управлением пулами соединений. Поддерживает продакшен-стандарты: таймауты, pre-ping,
+    реконнекционную логику и безопасную кодировку паролей.
+
+Архитектура:
+    - PostgresDatabaseConfig: Pydantic-конфигурация PostgreSQL с валидацией и computed-полем connection_url.
+    - create_postgre_engine(): Стандартная инициализация AsyncEngine с оптимизированными настройками пула.
+    - create_sqlite_engine(): Fallback-инициализация для разработки и тестов.
+    - create_session_maker(): Фабрика async_sessionmaker для DI в репозиториях и UoW.
+    - start_engine(): Главная точка входа с fallback-логикой PostgreSQL → SQLite.
+
+Ключевые принципы:
+    - Fail Fast: Конфигурация валидируется при создании (field_validator/model_validator).
+    - Fail Over: Автоматический fallback на SQLite при недоступности PostgreSQL.
+    - Security First: quote_plus() для паролей, логирование предупреждений о weak passwords.
+    - Production Ready: Настройки пула соединений (pool_size, pre_ping, recycle) в соответствии с рекомендациями SQLAlchemy.
+    - Explicit is Better than Implicit: Все параметры задаются явно через переменные окружения.
+
+Конфигурация (переменные окружения с префиксом POSTGRES_):
+    - HOST, PORT, USER, PASSWORD, DB — обязательные параметры подключения.
+    - POOL_SIZE (по умолчанию 10), MAX_OVERFLOW (20), POOL_TIMEOUT (30) — управление пулом.
+    - POOL_PRE_PING (True), POOL_RECYCLE (3600) — предотвращение «мертвых» соединений.
+    - ECHO (False) — отладочное логирование.
+
+Поддержка SQLite:
+    - SQLITE_SUPPORTED — глобальный флаг, разрешающий fallback на SQLite.
+    - Файл базы: <project_root>/app/src/dal/database/data/.database.db.
+    - Конфигурация: StaticPool + check_same_thread=False для совместимости с async/await.
+
+Инициализация:
+    1. Загрузка конфигурации из .env или переменных окружения.
+    2. Попытка подключения к PostgreSQL.
+    3. При ошибке — проверка флага SQLITE_SUPPORTED → fallback на SQLite.
+    4. Выполнение pre-flight check (SELECT 1) для подтверждения готовности.
+    5. Создание таблиц (если используются models.Base.metadata.create_all()).
+    6. Возврат (engine, session_maker) для DI в репозиториях и UoW.
+
+Типичное использование:
+    >>> engine, session_maker = await start_engine()
+    >>> async with session_maker() as session:
+    ...     result = await session.execute(select(User))
+
+Ограничения:
+    - PostgreSQL требует установки драйвера asyncpg.
+    - SQLite не подходит для production с высокой нагрузкой (ограничения одновременных записей).
+    - Для SQLite требуется Python >= 3.12 (встроенный async/await поддержка aiosqlite).
+    - Пароли с спецсимволами автоматически кодируются (quote_plus), что может повлиять на legacy-системы.
+
+Безопасность:
+    - Пароль не логируется.
+    - Валидация host/user/db_name на пустые значения.
+    - Предупреждение при совпадении пароля и логина.
+    - Никаких secrets в URL-логах.
+
+Ошибки:
+    - ConnectionRefusedError, TimeoutError: при недоступности PostgreSQL/SQLite.
+    - ValueError: при валидации конфигурации (пустые поля, некорректный порт).
+    - SystemExit(1): при полном отказе подключения к БД (fallback недоступен).
+
+Логирование:
+    - INFO: успешное подключение, создание сессий, таблиц.
+    - WARNING: fallback на SQLite, ошибки pre-ping, weak passwords.
+    - CRITICAL: полная недоступность БД — завершение работы.
+"""
+
 from urllib.parse import quote_plus
 from pydantic import Field, computed_field, field_validator, model_validator
 from pathlib import Path

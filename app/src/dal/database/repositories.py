@@ -1,3 +1,66 @@
+"""
+Модуль репозиториев для работы с базой данных.
+
+Назначение:
+    Предоставляет слой доступа к данным (DAL) на основе паттернов Unit of Work и Repository.
+    Реализует универсальные CRUD-операции и специфичные методы для каждой сущности.
+    Использует асинхронную ORM SQLAlchemy (AsyncSession) для максимальной производительности.
+
+Архитектура:
+    - BaseRepository: абстрактный базовый класс с универсальными CRUD-методами и пагинацией.
+    - Репозитории (UserRepository, TeamRepository и т.д.): наследуют BaseRepository и реализуют
+      специфичную логику для каждой модели (фильрация, джойны, уникальные запросы).
+    - Модели: SQLAlchemy DeclarativeBase (UserModel, TeamModel, ProjectModel и т.д.).
+    - Типизация: TypeVar("ModelType", bound=DeclarativeBase) + Generic[ModelType] для безопасных типов.
+
+Принципы и практики:
+    - SOLID: Single Responsibility (каждый репозиторий отвечает за одну модель), Dependency Inversion (интерфейс BaseRepository).
+    - DRY: универсальные методы (create, update, delete, get_all, get_all_paginated) вынесены в BaseRepository.
+    - KISS: простой и предсказуемый интерфейс без лишних абстракций.
+    - Composition over Inheritance: наследование используется только для общей логики (BaseRepository).
+    - Dependency Injection: сессия (`session`) внедряется через конструкторы.
+    - Twelve-Factor App: конфигурация вынесена в переменные окружения (не в код).
+    - BDUF: базовая архитектура продумана, но не перегружена (просто и ясно).
+
+Следование стандартам:
+    - PEP 8: именование snake_case, отступы, длина строк <= 120.
+    - PEP 257: подробные docstrings на русском языке для всех классов и публичных методов.
+    - PEP 484: строгая типизация (typing.TypeVar, Generic, Optional, Sequence, Tuple).
+    - PEP 570: позиционные параметры в конструкторах.
+
+Особенности реализации:
+    - AsyncSession: все методы асинхронные (`async def`).
+    - SQL-инъекции: исключены благодаря использованию ORM (parameterized queries).
+    - Оптимизация:
+        - get_all_paginated_by_stmt: позволяет передавать кастомные запросы.
+        - get_users_for_project: объединяет пользователей из двух источников без дубликатов.
+    - Обработка ошибок: ошибки БД пропускаются через SQLAlchemy, логируются на уровне сервисов.
+
+Ограничения:
+    - Не реализованы транзакционные методы (commit/rollback) — они находятся в UnitOfWork.
+    - Кэширование не встроено — реализовано на уровне CachedRepositoryProxy в cache_manager.py.
+    - Методы `get_all_paginated` используют `func.count()` — для больших таблиц рассмотрите кэширование total.
+
+Применение:
+    - Рекомендуется для использования в сервисах (services.py) через Dependency Injection.
+    - Не рекомендуется прямое создание репозиториев в эндпоинтах FastAPI — всегда через UoW.
+
+Пример использования:
+    # 1. В Unit of Work (DalDatabaseManager.uow())
+    async with DalDatabaseManager.uow() as uow:
+        user_repo = uow.users
+        user = await user_repo.get_by_id(user_id)
+        await user_repo.update(user)
+
+    # 2. Прямое использование (не рекомендуется)
+    async with async_session() as session:
+        user_repo = UserRepository(session)
+        users = await user_repo.get_all()
+
+    # 3. С пагинацией и фильтрацией
+    users, total = await user_repo.get_all_paginated(page=1, page_size=10, role="admin")
+"""
+
 from abc import ABC, abstractmethod
 from sqlalchemy.orm import DeclarativeBase, selectinload
 from typing import Optional, Sequence, Tuple, TypeVar, Generic

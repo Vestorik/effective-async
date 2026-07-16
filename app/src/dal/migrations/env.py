@@ -10,16 +10,16 @@
 
 from logging.config import fileConfig
 import asyncio
-from typing import cast
-
-from sqlalchemy import pool
+from sqlalchemy import pool, text
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.ext.asyncio import create_async_engine
 from alembic import context
-
+import logging
 # Наши модели
-from app.src.dal.models import BaseModel
-from app.src.dal.engine import SQLITE_SUPPORTED
+from app.src.dal.database.models import BaseModel
+from app.src.dal.database.engine import PostgresDatabaseConfig
+
+logger = logging.getLogger(__name__)
 
 # Логирование из Alembic .ini
 config = context.config
@@ -34,28 +34,10 @@ def get_url() -> str:
     """
     Возвращает URL базы данных из переменной окружения DATABASE_URL.
 
-    Если не задан — пытается использовать SQLite как fallback (если разрешено).
-    Иначе вызывает исключение.
-
-    Возвращает:
-        str: Строка подключения (например, postgresql+asyncpg://...)
-    
-    Вызывает:
-        RuntimeError: Если DATABASE_URL не задан и SQLite недоступен.
     """
-    from os import getenv
+    config = PostgresDatabaseConfig()
+    return config.connection_url
 
-    database_url = getenv("DATABASE_URL")
-    if database_url:
-        return database_url
-
-    if SQLITE_SUPPORTED:
-        from pathlib import Path
-
-        path_database = Path(__file__).parent / "data" / ".database.db"
-        return f"sqlite+aiosqlite:///{path_database}"
-
-    raise RuntimeError("DATABASE_URL не задан, а поддержка SQLite отключена")
 
 
 def run_migrations_offline() -> None:
@@ -100,11 +82,22 @@ async def run_migrations_online() -> None:
         echo=False,
     )
 
+
+    # 🆕 Проверка подключения перед запуском миграций
+    try:
+        async with connectable.connect() as connection:
+            # Выполняем тестовый запрос
+            await connection.execute(text("SELECT 1"))
+            logger.info("Подключение к БД успешно")
+    except Exception as e:
+        logger.critical("Не удалось подключиться к базе данных: %s", e)
+        raise RuntimeError("База данных недоступна. Миграции не могут быть применены.") from e
+
     async with connectable.connect() as connection:
-        # Для асинхронности нужно передать "поддельный" контекст
         await connection.run_sync(do_run_migrations)
 
     await connectable.dispose()
+
 
 
 # Запускаем онлайн-миграции
