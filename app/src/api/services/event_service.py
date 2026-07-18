@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from logging import getLogger
 from typing import List, Tuple
 from uuid import UUID
-
+from app.src.api.services.base_services import BaseService
 from app.src.api.exceptions import EventNotFound, MeetingNotFound
 from app.src.api.shems import EventSheme, MeetingSheme
 from app.src.dal.database.models import EventModel, MeetingModel
@@ -29,7 +29,7 @@ from app.src.dal.database.repositories import (
 logger = getLogger(__name__)
 
 
-class EventService:
+class EventService(BaseService):
     """
     Сервис управления событиями.
 
@@ -191,21 +191,9 @@ class EventService:
         
         
         
-"""
-Сервис управления встречами.
 
-Методы:
-    create_meeting: создаёт новую встречу.
-    get_meetings_for_team: получает встречи команды с пагинацией.
-    update_meeting: обновляет встречу.
-    delete_meeting: удаляет встречу.
 
-Ограничения:
-    - Проверка прав (manager/admin) делается в handlers.
-    - Проверка участников встречи — через UserRepository (валидация в handlers).
-"""
-
-class MeetingService:
+class MeetingService(BaseService):
     """
     Сервис управления встречами.
 

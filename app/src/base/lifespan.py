@@ -1,6 +1,6 @@
 from fastapi import FastAPI, APIRouter
 from contextlib import asynccontextmanager
-from app.src.api.handlers import api_router
+from app.src.api.main import api_router
 from fastapi_swagger_ui_theme import setup_swagger_ui_theme
 from app.src.dal.main import get_data_manager
 
@@ -17,12 +17,12 @@ async def startapp(app: FastAPI):
         docs_path="/docs",
     )
     
-    # app.state.data_manager = await get_data_manager()
+    app.state.data_manager = await get_data_manager()
 
 
 async def shutdown(app: FastAPI): 
-    # app.state.data_manger.close()
-    ...
+    if hasattr(app.state, "data_manager"):
+        await app.state.data_manager.close()
 
 
 @asynccontextmanager

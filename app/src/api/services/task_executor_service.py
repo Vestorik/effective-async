@@ -15,7 +15,7 @@
 """
 
 from logging import getLogger
-from typing import List, Tuple
+from typing import List, Tuple, Sequence
 from uuid import UUID
 
 from app.src.api.exceptions import TaskNotFound, UserNotFound
@@ -25,11 +25,11 @@ from app.src.dal.database.repositories import (
     TaskRepository,
     TaskExecutorRepository,
 )
-
+from app.src.api.services.base_services import BaseService
 logger = getLogger(__name__)
 
 
-class TaskExecutorService:
+class TaskExecutorService(BaseService):
     """
     Сервис управления исполнителями задач.
 
@@ -155,7 +155,7 @@ class TaskExecutorService:
             task_executor_repo: TaskExecutorRepository
             task_id: UUID
 
-        Возвращает:
+        Возвращает: 
             list[TaskExecutorOutSheme] — список исполнителей
         """
         executors = await task_executor_repo.get_executors_for_task(task_id)
@@ -167,7 +167,7 @@ class TaskExecutorService:
         user_id: UUID,
         page: int = 1,
         page_size: int = 10,
-    ) -> Tuple[TaskModel, TaskModel]:
+    ) -> Tuple[Sequence[TaskModel], int]:
         """
         Получает все задачи пользователя с пагинацией.
 

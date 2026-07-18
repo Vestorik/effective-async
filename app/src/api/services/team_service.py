@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from logging import getLogger
 from typing import List
 from uuid import UUID
-
+from app.src.api.services.base_services import BaseService
 from app.src.api.exceptions import TeamAlreadyExists, TeamNotFound
 from app.src.api.shems import TeamSchema
 from app.src.dal.database.models import TeamModel
@@ -25,7 +25,7 @@ from app.src.dal.database.repositories import UserRepository, TeamRepository
 logger = getLogger(__name__)
 
 
-class TeamService:
+class TeamService(BaseService):
     """
     Сервис управления командами.
 

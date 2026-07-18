@@ -126,6 +126,15 @@ class TeamWithUsersSheme(TeamSchema):
 
     users: List["UserOutSheme"]
 
+class TeamUpdateSheme(BaseModel):
+    """
+    Схема обновления команды.
+
+    Все поля опциональны.
+    """
+
+    name: Optional[str] = Field(default=None, min_length=2, max_length=100)
+
 
 class ProjectSchema(BaseModelSheme):
     """
@@ -136,6 +145,20 @@ class ProjectSchema(BaseModelSheme):
 
     name: str
     description: Optional[str] = Field(default=None, description="Описание проекта.")
+
+
+class ProjectCreate(BaseModel):
+    """Входная схема создания проекта."""
+    name: str = Field(..., min_length=2, max_length=255)
+    description: Optional[str] = Field(default=None, max_length=1024)
+    team_ids: Optional[List[UUID]] = Field(default=None, description="Список ID команд, участвующих в проекте.")
+
+
+class ProjectUpdate(BaseModel):
+    """Входная схема обновления проекта."""
+    name: Optional[str] = Field(default=None, min_length=2, max_length=255)
+    description: Optional[str] = Field(default=None, max_length=1024)
+    team_ids: Optional[List[UUID]] = Field(default=None, description="Список ID команд, участвующих в проекте.")
 
 
 class TeamWithProjectsSheme(TeamSchema):
@@ -155,9 +178,21 @@ class TaskExecutorOutSheme(BaseModelSheme):
     Содержит user_id, estimate и мета-данные.
     """
 
+    task_id: UUID
     user_id: UUID
-    estimate: Optional[int] = Field(default=None, description="Оценка в часах/пунктах (если указана).")
+    estimate: Optional[int] = Field(default=None, description="Оценка исполнителя задачи")
 
+
+class AddExecutor(BaseModel):
+    """Входная схема для добавления исполнителя."""
+    user_id: UUID
+    estimate: Optional[int] = None
+
+
+class TaskUpdateSheme(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    priority: Optional[str] = None
 
 class TaskOutSheme(BaseModelSheme):
     """
@@ -182,6 +217,19 @@ class TaskWithExecutorsSheme(TaskOutSheme):
 
     executors: List["TaskExecutorOutSheme"]
 
+
+class TaskCreate(BaseModel):
+    """Входная схема создания задачи."""
+    name: str
+    description: Optional[str] = None
+    priority: str = "medium"  # low, medium, high
+    parent_id: Optional[UUID] = None
+    executor_ids: Optional[List[UUID]] = None
+
+
+class TaskCreateOutSheme(TaskOutSheme):
+    """Схема для выхода при создании задачи."""
+    pass
 
 class MeetingSheme(TimeEventSheme):
     """
@@ -246,6 +294,10 @@ class MeetingCreate(BaseModel):
         except ValueError as e:
             raise ValueError(f"Ошибка валидации времени: {e}")
         return v
+    
+
+
+
     
 # 🔁 Ручное исправление циклической зависимости для вложенных схем
 # (Pydantic v2 не поддерживает forward-ссылки в моделях-наследниках)

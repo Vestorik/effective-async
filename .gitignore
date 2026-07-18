@@ -1,0 +1,30 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+.env
+
+
+.pytest_cache/
+/app/logging/*
+!/app/logging/.gitkeep
+/app/data/*
+!/app/data/.gitkeep
+/app/output/*
+!/app/output/.gitkeep
+/app/cache/*
+!/app/cache/.gitkeep
+.aidev
+
+/.devtool
+
+app/logging
+
+/.gigacode
+/.continue

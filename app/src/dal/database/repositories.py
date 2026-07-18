@@ -474,14 +474,27 @@ class TaskExecutorRepository(BaseRepository):
         result = await self.session.scalars(stmt)
         return result.unique().all()
 
-    async def get_tasks_for_user(self, user_id: UUID) -> Sequence[TaskModel]:
+    async def get_tasks_for_user(
+        self,
+        user_id: UUID,
+        page: int = 1,
+        page_size: int = 10,
+    ) -> Tuple[Sequence[TaskModel], int]:
+        offset = (page - 1) * page_size
         stmt = (
             select(TaskModel)
             .join(TaskExecutorModel)
             .where(TaskExecutorModel.user_id == user_id)
         )
+
+        # Подсчёт total
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total_result = await self.session.execute(count_stmt)
+        total: int = total_result.scalar_one()
+
+        stmt = stmt.limit(page_size).offset(offset)
         result = await self.session.scalars(stmt)
-        return result.unique().all()
+        return result.unique().all(), total
 
 
 class MeetingRepository(BaseRepository):

@@ -85,7 +85,7 @@ from logging import getLogger
 from typing import TYPE_CHECKING
 
 
-RepositoryType = TypeVar("RepositoryType")
+RepositoryLike = TypeVar("RepositoryLike")
 logger = getLogger()
 
 
@@ -104,7 +104,7 @@ class RedisConfig(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file="deploy/.env",
         env_file_encoding="utf-8",
         extra="ignore",
         env_prefix="REDIS_",
@@ -223,7 +223,7 @@ def create_cache_manager_from_config(
     return CacheManager(redis_client, ttl)
 
 
-class CachedRepositoryProxy(Generic[RepositoryType]):
+class CachedRepositoryProxy(Generic[RepositoryLike]):
     """
     Прокси-обёртка для репозитория с автоматическим кэшированием read-операций.
 
@@ -288,7 +288,7 @@ class CachedRepositoryProxy(Generic[RepositoryType]):
     """
     def __init__(
         self,
-        repository_obj: RepositoryType,
+        repository_obj: RepositoryLike,
         cache_manager: CacheManager,
         key_prefix: str,
         time_segment: timedelta,

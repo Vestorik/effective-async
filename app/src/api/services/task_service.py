@@ -15,7 +15,7 @@
 from logging import getLogger
 from typing import Optional, Sequence
 from uuid import UUID
-
+from app.src.api.services.base_services import BaseService
 from app.src.api.exceptions import TaskNotFound, TeamNotFound
 from app.src.dal.database.repositories import TeamRepository, TaskRepository, TaskExecutorRepository
 from app.src.dal.database.models import TaskModel, TaskExecutorModel
@@ -23,7 +23,7 @@ from app.src.dal.database.models import TaskModel, TaskExecutorModel
 logger = getLogger(__name__)
 
 
-class TaskService:
+class TaskService(BaseService):
     """
     Сервис управления задачами.
 

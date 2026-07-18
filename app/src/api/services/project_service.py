@@ -24,11 +24,11 @@ from app.src.api.exceptions import ProjectNotFound
 from app.src.api.shems import ProjectSchema
 from app.src.dal.database.models import ProjectModel, TeamModel
 from app.src.dal.database.repositories import ProjectRepository, TeamRepository
-
+from app.src.api.services.base_services import BaseService
 logger = getLogger(__name__)
 
 
-class ProjectService:
+class ProjectService(BaseService):
     """
     Сервис управления проектами.
 
