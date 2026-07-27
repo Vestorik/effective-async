@@ -295,6 +295,42 @@ class UserRepository(BaseRepository[UserModel]):
         users = result.scalars().all()
 
         return users, total
+    
+    async def get_by_refresh_token_hash(
+        self,
+        refresh_token_hash: str,
+    ) -> Optional[UserModel]:
+        """
+        Получает пользователя по хэшу refresh_token (для проверки валидности токена).
+
+        Аргументы:
+            refresh_token_hash (str): Хэш refresh_token (argon2).
+
+        Возвращает:
+            Optional[UserModel]: Пользователь или None, если не найден.
+        """
+        result = await self.session.execute(
+            select(self.model).where(self.model.refresh_token_hash == refresh_token_hash)
+        )
+        return result.scalar_one_or_none()
+
+    async def clear_refresh_token_hash(
+        self,
+        user_id: UUID,
+    ) -> None:
+        """
+        Очищает хэш refresh_token пользователя (для logout и ротации сессий).
+
+        Аргументы:
+            user_id (UUID): ID пользователя.
+
+        Возвращает:
+            None
+        """
+        user = await self.get_by_id(user_id)
+        if user:
+            user.refresh_token_hash = None
+            await self.update(user)
 
 
 
@@ -313,6 +349,18 @@ class TeamRepository(BaseRepository):
         stmt = select(self.model).where(self.model.name == name)
         result = await self.session.scalars(stmt)
         return result.first()
+    
+    async def get_by_id(self, obj_id: UUID) -> Optional[TeamModel]:
+        """
+        Получает команду по ID.
+
+        Аргументы:
+            obj_id (UUID): ID команды.
+
+        Возвращает:
+            Optional[TeamModel]: Команда или None.
+        """
+        return await self.session.get(self.model, obj_id)
 
 
 class ProjectRepository(BaseRepository):
@@ -329,6 +377,17 @@ class ProjectRepository(BaseRepository):
     def __init__(self, session: AsyncSession):
         super().__init__(session, ProjectModel) 
 
+    async def get_by_id(self, obj_id: UUID) -> Optional[ProjectModel]:
+        """
+        Получает проект по ID.
+
+        Аргументы:
+            obj_id (UUID): ID проекта.
+
+        Возвращает:
+            Optional[ProjectModel]: Проект или None.
+        """
+        return await self.session.get(self.model, obj_id)
 
     async def get_by_name(self, name: str) -> ProjectModel | None:
         stmt = select(self.model).where(self.model.name == name)
@@ -387,6 +446,17 @@ class TaskRepository(BaseRepository):
     def __init__(self, session: AsyncSession):
         super().__init__(session, TaskModel) 
 
+    async def get_by_id(self, obj_id: UUID) -> Optional[TaskModel]:
+        """
+        Получает задачу по ID.
+
+        Аргументы:
+            obj_id (UUID): ID задачи.
+
+        Возвращает:
+            Optional[TaskModel]: Задача или None.
+        """
+        return await self.session.get(self.model, obj_id)
 
     async def get_by_project_id(self, project_id: UUID) -> Sequence[TaskModel]:
         stmt = select(self.model).where(self.model.project_id == project_id)
@@ -449,6 +519,17 @@ class TaskExecutorRepository(BaseRepository):
     def __init__(self, session: AsyncSession):
         super().__init__(session, TaskExecutorModel) 
 
+    async def get_by_id(self, obj_id: UUID) -> Optional[TaskExecutorModel]:
+        """
+        Получает исполнителя задачи по ID.
+
+        Аргументы:
+            obj_id (UUID): ID исполнителя.
+
+        Возвращает:
+            Optional[TaskExecutorModel]: Запись исполнителя или None.
+        """
+        return await self.session.get(self.model, obj_id)
 
     async def get_by_task_and_user(self, task_id: UUID, user_id: UUID) -> TaskExecutorModel | None:
         stmt = select(self.model).where(
@@ -500,8 +581,33 @@ class TaskExecutorRepository(BaseRepository):
 class MeetingRepository(BaseRepository):
     def __init__(self, session: AsyncSession):
         super().__init__(session, model=MeetingModel) 
+        
+    async def get_by_id(self, obj_id: UUID) -> Optional[MeetingModel]:
+        """
+        Получает встречу по ID.
+
+        Аргументы:
+            obj_id (UUID): ID встречи.
+
+        Возвращает:
+            Optional[MeetingModel]: Встреча или None.
+        """
+        return await self.session.get(self.model, obj_id)
+
 
 
 class EventRepository(BaseRepository):
     def __init__(self, session: AsyncSession):
         super().__init__(session, model=EventModel) 
+        
+    async def get_by_id(self, obj_id: UUID) -> Optional[EventModel]:
+        """
+        Получает событие по ID.
+
+        Аргументы:
+            obj_id (UUID): ID события.
+
+        Возвращает:
+            Optional[EventModel]: Событие или None.
+        """
+        return await self.session.get(self.model, obj_id)

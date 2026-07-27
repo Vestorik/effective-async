@@ -71,6 +71,7 @@
         # Write-операция — обходит кэш
         await uow.users.update(user)
 """
+from pathlib import Path
 
 
 import functools
@@ -104,15 +105,15 @@ class RedisConfig(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file="deploy/.env",
+        env_file=Path(__file__).resolve().parents[4] / "deploy" / ".env",
         env_file_encoding="utf-8",
-        extra="ignore",
+        extra="allow",
         env_prefix="REDIS_",
     )
 
-    host: str = Field(..., alias="HOST", min_length=1)
-    port: int = Field(default=6379, alias="PORT", ge=1, le=65535)
-    db: int = Field(default=0, alias="DB", ge=0)
+    host: str = Field(..., min_length=1)
+    port: int = Field(default=6379, ge=1, le=65535)
+    db: int = Field(default=0, ge=0)
     password: Optional[str] = Field(default=None, alias="PASSWORD")
     ssl: bool = Field(default=False, alias="SSL")
 
@@ -202,7 +203,7 @@ class CacheManager:
 
 
 def create_cache_manager_from_config(
-    config: RedisConfig = RedisConfig(), ttl: timedelta = timedelta(minutes=5)
+    config: Optional[RedisConfig] = None, ttl: timedelta = timedelta(minutes=5)
 ) -> CacheManager:
     """
     Создаёт CacheManager на основе RedisConfig.
@@ -219,6 +220,8 @@ def create_cache_manager_from_config(
         config = RedisConfig()
         cache = await create_cache_manager_from_config(config)
     """
+    if config is None:
+        config = RedisConfig()  # <-- Создаём только при необходимости
     redis_client = Redis.from_url(config.connection_url, decode_responses=False)
     return CacheManager(redis_client, ttl)
 

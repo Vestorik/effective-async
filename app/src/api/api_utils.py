@@ -31,5 +31,7 @@ def get_data_manager(request: Request) -> DataManager:
     return request.app.state.data_manager
 
 
-# Удобный Alias для аннотаций
+# Alias для аннотаций
 DependsDataManager = Annotated[DataManager, Depends(get_data_manager)]
+
+

@@ -1,11 +1,11 @@
 from fastapi import FastAPI, APIRouter
 from contextlib import asynccontextmanager
-from app.src.api.main import api_router
+from app.src.api.main import api_routers
 from fastapi_swagger_ui_theme import setup_swagger_ui_theme
 from app.src.dal.main import get_data_manager
 
 
-__all_routers: list[APIRouter] = [api_router]
+__all_routers: list[APIRouter] = api_routers
 
 
 async def startapp(app: FastAPI):

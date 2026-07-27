@@ -12,15 +12,20 @@
     - Валидация прав вынесена в handlers.py (через `Depends` или встроенные декораторы).
 """
 from datetime import datetime, timezone
-
 from logging import getLogger
 from typing import List, Optional, Tuple
 from uuid import UUID
 
+from passlib.context import CryptContext
+
 from app.src.api.exceptions import UserNotFound
-from app.src.api.shems import UserOutSheme, UserUpdateSheme
-from app.src.dal.database.repositories import UserRepository
 from app.src.api.services.base_services import BaseService
+from app.src.api.shems import UserCreateSheme, UserOutSheme, UserUpdateSheme
+from app.src.dal.database.repositories import UserRepository
+
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+
+from app.src.dal.database.models import UserModel
 
 logger = getLogger(__name__)
 
@@ -42,6 +47,47 @@ class UserService(BaseService):
         update_user: Обновляет данные пользователя.
         delete_user: Удаляет пользователя.
     """
+    
+    async def create(
+        self,
+        repository: UserRepository,
+        obj: UserCreateSheme,
+    ) -> UserOutSheme:
+        """
+        Создаёт нового пользователя.
+
+        Аргументы:
+            repository: UserRepository.
+            obj (UserCreateSheme): Входные данные пользователя.
+
+        Возвращает:
+            UserOutSheme: Созданный пользователь.
+
+        Исключения:
+            UserAlreadyExists: Если email уже занят.
+        """
+
+
+        # Проверка уникальности email
+        existing_user = await repository.get_by_email(obj.email)
+        if existing_user:
+            from app.src.api.exceptions import UserAlreadyExists
+            raise UserAlreadyExists()
+
+        # Хэширование пароля и создание модели
+        hashed_password = pwd_context.hash(obj.password)
+        user = UserModel(
+            username=obj.username,
+            email=obj.email,
+            hashed_password=hashed_password,
+            role=obj.role,
+            team_id=obj.team_id,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+
+        await repository.create(user)
+        return UserOutSheme.model_validate(user)
 
     async def get_user_by_id(
         self,

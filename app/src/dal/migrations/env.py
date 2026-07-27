@@ -8,16 +8,28 @@
 Важно: использует `run_migrations_online()` как единственный режим — без offline.
 """
 
-from logging.config import fileConfig
 import asyncio
+import logging
+from logging.config import fileConfig
+
+from alembic import context
 from sqlalchemy import pool, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
-from alembic import context
-import logging
-# Наши модели
-from app.src.dal.database.models import BaseModel
+
 from app.src.dal.database.engine import PostgresDatabaseConfig
+
+# Наши модели
+from app.src.dal.database.models import (
+    BaseModel,
+    EventModel,
+    MeetingModel,
+    ProjectModel,
+    TaskExecutorModel,
+    TaskModel,
+    TeamModel,
+    UserModel,
+)
 
 logger = logging.getLogger(__name__)
 

@@ -13,9 +13,8 @@ user_router = APIRouter(prefix="/users")
     "/users", status_code=status.HTTP_201_CREATED, response_model=UserOutSheme
 )
 async def create_user(
-    db_manager: DependsDataManager,
     user_data: UserCreateSheme,
-    user_service: UserService = UserService(),
+    db_manager: DependsDataManager,
 ):
     """
     Создаёт нового пользователя.
@@ -31,6 +30,7 @@ async def create_user(
         UserOutSheme: Созданный пользователь (без пароля).
     """
     try:
+        user_service: UserService = UserService()
         async with db_manager() as uow:
             user = await user_service.create(
                 repository=uow.users,
@@ -47,7 +47,7 @@ async def create_user(
 async def get_user(
     db_manager: DependsDataManager,
     user_id: UUID = Path(..., description="ID пользователя"),
-    user_service: UserService = UserService(),
+    
 ):
     """
     Получает пользователя по ID.
@@ -59,6 +59,7 @@ async def get_user(
         404: Если пользователь не найден.
     """
     try:
+        user_service: UserService = UserService()
         async with db_manager() as uow:
             user = await user_service.get_user_by_id(
                 repository=uow.users,
@@ -71,10 +72,9 @@ async def get_user(
 
 @user_router.patch("/users/{user_id}", response_model=UserOutSheme)
 async def update_user(
-    db_manager: DependsDataManager,
     user_data: UserUpdateSheme,
+    db_manager: DependsDataManager,
     user_id: UUID = Path(..., description="ID пользователя"),
-    user_service: UserService = UserService(),
 ):
     """
     Обновляет данные пользователя.
@@ -86,6 +86,7 @@ async def update_user(
         404: Если пользователь не найден.
     """
     try:
+        user_service: UserService = UserService()
         async with db_manager() as uow:
             user = await user_service.update_user(
                 repository=uow.users,
@@ -101,7 +102,6 @@ async def update_user(
 async def delete_user(
     db_manager: DependsDataManager,
     user_id: UUID = Path(..., description="ID пользователя"),
-    user_service: UserService = UserService(),
 ):
     """
     Удаляет пользователя.
@@ -110,6 +110,7 @@ async def delete_user(
         404: Если пользователь не найден.
     """
     try:
+        user_service: UserService = UserService()
         async with db_manager() as uow:
             await user_service.delete_user(
                 repository=uow.users,

@@ -81,18 +81,27 @@
 """
 
 from __future__ import annotations
+
 from datetime import datetime, timezone
 from enum import Enum
 from logging import getLogger
-from uuid import uuid4, UUID
-from passlib.context import CryptContext
-from sqlalchemy import DateTime, String, PrimaryKeyConstraint, DDL, event
-from typing import Optional
-from sqlalchemy import Table, Column, ForeignKey, Integer
-from sqlalchemy.orm import relationship, mapped_column, Mapped
-from sqlalchemy.dialects.postgresql import UUID as SQL_UUID
+from typing import Optional, Self
+from uuid import UUID, uuid4
 
-from sqlalchemy.orm import DeclarativeBase
+from passlib.context import CryptContext
+from sqlalchemy import (
+    DDL,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    PrimaryKeyConstraint,
+    String,
+    Table,
+    event,
+)
+from sqlalchemy.dialects.postgresql import UUID as SQL_UUID
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 logger = getLogger(__name__)
 
@@ -200,6 +209,8 @@ class UserModel(BaseModel):
         nullable=False,
         comment="Хэшированный пароль пользователя, созданный с помощью bcrypt.",
     )
+    
+    refresh_token_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, comment="Хэш refresh_token для обеспечения безопасного logout и ротации сессий.",)
 
     def check_password(self, plain_password: str) -> bool:
         """
@@ -304,15 +315,24 @@ class TaskModel(BaseModel):
     name: Mapped[str] = mapped_column(String(124), nullable=False)
     description: Mapped[str] = mapped_column(String(512), nullable=True)
 
+    id: Mapped[SQL_UUID] = mapped_column(
+        SQL_UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+        comment="Уникальный идентификатор записи (UUID).",
+    )
+
     #  sub tasks
     parent_id: Mapped[Optional[UUID]] = mapped_column(
+        SQL_UUID(as_uuid=True),
         ForeignKey("tasks.id"),
         nullable=True,
         index=True,
+        comment="Внешний ключ на родительскую задачу (самоссылка 1:N).",
     )
     parent: Mapped[Optional["TaskModel"]] = relationship(
         "TaskModel",
-        remote_side=[parent_id],
+        remote_side=[id],
         back_populates="sub_tasks",
     )
     sub_tasks: Mapped[list["TaskModel"]] = relationship(

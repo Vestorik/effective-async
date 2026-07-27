@@ -280,8 +280,8 @@ user_tasks_router = APIRouter(prefix="/users/{user_id}/tasks", tags=["Задач
     },
 )
 async def get_tasks_for_user(
-    data_manager: DependsDataManager,
     user_id: UUID,
+    data_manager: DependsDataManager,
     page: Annotated[int, Query(ge=1, description="Номер страницы")] = 1,
     page_size: Annotated[int, Query(ge=1, le=100, description="Количество записей на страницу")] = 10,
 ):

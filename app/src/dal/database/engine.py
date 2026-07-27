@@ -67,6 +67,7 @@
     - WARNING: fallback на SQLite, ошибки pre-ping, weak passwords.
     - CRITICAL: полная недоступность БД — завершение работы.
 """
+from dotenv import find_dotenv, load_dotenv
 
 from urllib.parse import quote_plus
 from pydantic import Field, computed_field, field_validator, model_validator
@@ -86,7 +87,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # состояние поддержки SQLite 
 SQLITE_SUPPORTED = False
-
+path = Path(__file__).resolve().parents[4] / "deploy" / ".env"
+load_dotenv(dotenv_path=path, override=True)
 
 class PostgresDatabaseConfig(BaseSettings):
     """
@@ -119,26 +121,26 @@ class PostgresDatabaseConfig(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file="deploy/.env",
+        # env_file=find_dotenv(filename=".env", raise_error_if_not_found=False),
         env_file_encoding="utf-8",
         extra="ignore",
         env_prefix="POSTGRES_",  
     )
     
 
-    host: str = Field(..., alias="HOST", min_length=1, exclude=True)       
-    port: int = Field(..., alias="PORT", ge=1, le=65535, exclude=True)     
-    user: str = Field(..., alias="USER", min_length=1, exclude=True)      
-    password: str | None = Field(default=None, alias="PASSWORD", exclude=True)  
-    db_name: str = Field(..., alias="DB", min_length=1, exclude=True)  
+    host: str = Field(..., env_alias="HOST", min_length=1, exclude=True)       
+    port: int = Field(..., env_alias="PORT", ge=1, le=65535,exclude=True)     
+    user: str = Field(..., env_alias="USER", min_length=1, exclude=True)
+    password: str | None = Field(default=None, env_alias="PASSWORD", exclude=True)
+    db_name: str = Field(..., env_alias="DB_NAME", min_length=1, exclude=True)
 
     # optional
-    echo: bool = Field(default=False, alias="ECHO")    
-    max_overflow: int = Field(default=20, alias="MAX_OVERFLOW", ge=0) 
-    pool_pre_ping: bool = Field(default=True, alias="POOL_PRE_PING") 
-    pool_recycle: int = Field(default=3600, alias="POOL_RECYCLE", ge=0) 
-    pool_size: int = Field(default=10, alias="POOL_SIZE", ge=1)
-    pool_timeout: int = Field(default=30, alias="POOL_TIMEOUT", ge=1)
+    echo: bool = Field(default=False, env_alias="ECHO")    
+    max_overflow: int = Field(default=20, env_alias="MAX_OVERFLOW", ge=0) 
+    pool_pre_ping: bool = Field(default=True, env_alias="POOL_PRE_PING") 
+    pool_recycle: int = Field(default=3600, env_alias="POOL_RECYCLE", ge=0) 
+    pool_size: int = Field(default=10, env_alias="POOL_SIZE", ge=1)
+    pool_timeout: int = Field(default=30, env_alias="POOL_TIMEOUT", ge=1)
 
     @computed_field
     @property
@@ -268,9 +270,11 @@ def create_postgre_engine(db_config: PostgresDatabaseConfig) -> AsyncEngine:
     """
 
     database_url = db_config.connection_url
+    print(database_url)
+    other_config = db_config.model_dump(exclude={"connection_url"})
     
     logger.info("Попытка подключения к базе данных PostgreSQL")
-    postgre_engine: AsyncEngine = create_async_engine(database_url, **db_config.model_dump())
+    postgre_engine: AsyncEngine = create_async_engine(database_url, **other_config)
     return postgre_engine
 
 
