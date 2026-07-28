@@ -1,120 +1,167 @@
-from fastapi import APIRouter, status, HTTPException, Path
+from datetime import timedelta
 from uuid import UUID
-from app.src.api.services.user_service import UserService
-from app.src.api.shems import UserCreateSheme, UserUpdateSheme, UserOutSheme
 
-from app.src.api.api_utils import DependsDataManager
+from fastapi import APIRouter, HTTPException, status
+
+from app.src.api.api_utils import DataManager
+from app.src.api.exceptions import UserNotFound
+from app.src.api.services.user_service import UserService
+from app.src.api.shems import UserCreateSheme, UserOutSheme, UserUpdateSheme
 
 user_router = APIRouter(prefix="/users")
 
 
 # === Пользователи ===
-@user_router.post(
-    "/users", status_code=status.HTTP_201_CREATED, response_model=UserOutSheme
-)
-async def create_user(
+async def create_user_handler(
     user_data: UserCreateSheme,
-    db_manager: DependsDataManager,
-):
+    data_manager: DataManager,
+) -> UserOutSheme:
     """
-    Создаёт нового пользователя.
+    Создание пользователя через UserService.
 
-    Валидация:
-        - Pydantic: username, email, password (через UserCreateSheme).
-        - Сервис: уникальность email, хэширование пароля.
-
-    Ограничения:
-        - Проверка прав (admin) — в реальном проекте через Depends.
+    Аргументы:
+        user_data (UserCreateSheme): Данные пользователя.
+        data_manager (DataManager): Внедрённый менеджер данных.
 
     Возвращает:
-        UserOutSheme: Созданный пользователь (без пароля).
+        UserOutSheme: Созданный пользователь.
+
+    Дополнительная информация:
+        - Write-операция — не кэшируется.
+        - Валидация уникальности email и хэширование пароля выполняются в сервисе.
+
+    Возможные исключения:
+        HTTPException: 400 или 409, если пользователь с таким email уже существует.
     """
-    try:
-        user_service: UserService = UserService()
-        async with db_manager() as uow:
+    async with data_manager() as uow:
+        user_service = UserService()
+        try:
             user = await user_service.create(
                 repository=uow.users,
                 obj=user_data,
             )
-        return user
-    except Exception as ex:
-        raise HTTPException(
-            status_code=400, detail=f"Ошибка создания пользователя: {ex}"
-        )
+            return UserOutSheme.model_validate(user)
+        except Exception as ex:
+            # Перехват специфичных ошибок сервиса и преобразование в HTTP
+            detail = str(ex)
+            if "email" in detail.lower() or "exists" in detail.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Пользователь с таким email уже существует",
+                )
+            raise
 
 
-@user_router.get("/users/{user_id}", response_model=UserOutSheme)
-async def get_user(
-    db_manager: DependsDataManager,
-    user_id: UUID = Path(..., description="ID пользователя"),
-    
-):
+async def get_user_handler(
+    user_id: UUID,
+    data_manager: DataManager,
+) -> UserOutSheme:
     """
-    Получает пользователя по ID.
+    Получение пользователя по ID через кэшированный Unit of Work.
+
+    Аргументы:
+        user_id (UUID): ID пользователя.
+        data_manager (DataManager): Внедрённый менеджер данных.
 
     Возвращает:
         UserOutSheme: Данные пользователя.
 
-    Исключения:
-        404: Если пользователь не найден.
+    Дополнительная информация:
+        - Кэширование TTL: 10 минут.
+        - Используется `uow.users.get_by_id`.
+
+    Возможные исключения:
+        HTTPException: 404, если пользователь не найден.
     """
-    try:
-        user_service: UserService = UserService()
-        async with db_manager() as uow:
-            user = await user_service.get_user_by_id(
-                repository=uow.users,
-                obj_id=user_id,
+    async with data_manager.cache(timedelta(minutes=10)) as cuow:
+        user = await cuow.users.get_by_id(user_id)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Пользователь не найден",
             )
-        return user
-    except Exception as ex:
-        raise HTTPException(status_code=404, detail=f"Пользователь не найден: {ex}")
+        return UserOutSheme.model_validate(user)
 
 
-@user_router.patch("/users/{user_id}", response_model=UserOutSheme)
-async def update_user(
+async def update_user_handler(
+    user_id: UUID,
     user_data: UserUpdateSheme,
-    db_manager: DependsDataManager,
-    user_id: UUID = Path(..., description="ID пользователя"),
-):
+    data_manager: DataManager,
+) -> UserOutSheme:
     """
-    Обновляет данные пользователя.
+    Обновление пользователя через UserService.
+
+    Аргументы:
+        user_id (UUID): ID пользователя.
+        user_data (UserUpdateSheme): Обновляемые данные.
+        data_manager (DataManager): Внедрённый менеджер данных.
 
     Возвращает:
         UserOutSheme: Обновлённый пользователь.
 
-    Исключения:
-        404: Если пользователь не найден.
+    Дополнительная информация:
+        - Write-операция — не кэшируется.
+        - Обновляются только непустые поля.
+
+    Возможные исключения:
+        HTTPException: 404, если пользователь не найден.
+        HTTPException: 409, если обновлённый email уже занят другим пользователем.
     """
-    try:
-        user_service: UserService = UserService()
-        async with db_manager() as uow:
+    async with data_manager() as uow:
+        user_service = UserService()
+        try:
             user = await user_service.update_user(
                 repository=uow.users,
                 obj_id=user_id,
                 user_data=user_data,
             )
-        return user
-    except Exception as ex:
-        raise HTTPException(status_code=404, detail=f"Пользователь не найден: {ex}")
+            return UserOutSheme.model_validate(user)
+        except UserNotFound as ex:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=ex.detail,
+            )
+        except Exception as ex:
+            detail = str(ex)
+            if "email" in detail.lower() or "exists" in detail.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Пользователь с таким email уже существует",
+                )
+            raise
 
 
-@user_router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_user(
-    db_manager: DependsDataManager,
-    user_id: UUID = Path(..., description="ID пользователя"),
-):
+
+
+async def delete_user_handler(
+    user_id: UUID,
+    data_manager: DataManager,
+) -> None:
     """
-    Удаляет пользователя.
+    Удаление пользователя через UserService.
 
-    Исключения:
-        404: Если пользователь не найден.
+    Аргументы:
+        user_id (UUID): ID пользователя.
+        data_manager (DataManager): Внедрённый менеджер данных.
+
+    Возвращает:
+        None: Операция удаления не возвращает данные.
+
+    Дополнительная информация:
+        - Write-операция — не кэшируется.
+
+    Возможные исключения:
+        HTTPException: 404, если пользователь не найден.
     """
-    try:
-        user_service: UserService = UserService()
-        async with db_manager() as uow:
+    async with data_manager() as uow:
+        user_service = UserService()
+        try:
             await user_service.delete_user(
                 repository=uow.users,
                 obj_id=user_id,
             )
-    except Exception as ex:
-        raise HTTPException(status_code=404, detail=f"Пользователь не найден: {ex}")
+        except UserNotFound as ex:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=ex.detail,
+            )

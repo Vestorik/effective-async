@@ -1,0 +1,266 @@
+{# app/src/api/templates/pages/projects/detail.html #}
+"""
+Страница детальной информации о проекте.
+
+Отображает информацию о проекте, списках команд и задач.
+"""
+
+{% extends "base.html" %}
+
+{% block title %}{{ project.name }}{% endblock %}
+
+{% block head %}
+<style>
+    .project-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 2rem;
+    }
+    
+    .project-info {
+        background-color: white;
+        border-radius: 0.5rem;
+        box-shadow: var(--shadow-sm);
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .project-info h1 {
+        font-size: 2rem;
+        font-weight: 600;
+        color: var(--primary-color);
+        margin-bottom: 1rem;
+    }
+    
+    .project-info p {
+        color: var(--secondary-color);
+        margin-bottom: 1rem;
+    }
+    
+    .project-stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+    
+    .stat-item {
+        background-color: var(--light-color);
+        padding: 1rem;
+        border-radius: 0.5rem;
+        text-align: center;
+    }
+    
+    .stat-item h4 {
+        font-size: 2rem;
+        font-weight: bold;
+        color: var(--primary-color);
+        margin-bottom: 0.5rem;
+    }
+    
+    .stat-item p {
+        font-size: 0.875rem;
+        color: var(--secondary-color);
+        margin: 0;
+    }
+    
+    .team-list,
+    .task-list {
+        background-color: white;
+        border-radius: 0.5rem;
+        box-shadow: var(--shadow-sm);
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .team-list h3,
+    .task-list h3 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .team-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        border: 1px solid var(--border-color);
+        border-radius: 0.375rem;
+        margin-bottom: 0.75rem;
+    }
+    
+    .task-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .task-item:hover {
+        background-color: var(--light-color);
+    }
+    
+    .task-info {
+        flex: 1;
+    }
+    
+    .task-name {
+        font-weight: 500;
+        margin-bottom: 0.25rem;
+    }
+    
+    .task-meta {
+        font-size: 0.75rem;
+        color: var(--secondary-color);
+    }
+    
+    .priority-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    
+    .priority-high { background-color: #fee2e2; color: #991b1b; }
+    .priority-medium { background-color: #fef3c7; color: #92400e; }
+    .priority-low { background-color: #dcfce7; color: #166534; }
+    
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+    }
+    
+    .member-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background-color: var(--primary-color);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="project-header">
+    <div>
+        <a href="/projects" class="btn btn-sm btn-secondary" style="margin-bottom: 1rem;">
+            <span class="icon">←</span>
+            Назад к проектам
+        </a>
+    </div>
+    <div class="action-buttons">
+        <a href="/projects/{{ project.id }}/edit" class="btn btn-secondary">
+            <span class="icon">✏️</span>
+            Редактировать
+        </a>
+        <a href="/projects/{{ project.id }}/delete" class="btn btn-danger" onclick="return confirm('Вы уверены, что хотите удалить проект?');">
+            <span class="icon">🗑️</span>
+            Удалить
+        </a>
+    </div>
+</div>
+
+<div class="project-info">
+    <h1>{{ project.name }}</h1>
+    {% if project.description %}
+    <p>{{ project.description }}</p>
+    {% endif %}
+    
+    <div class="project-stats">
+        <div class="stat-item">
+            <h4>{{ teams|length }}</h4>
+            <p>Команд</p>
+        </div>
+        <div class="stat-item">
+            <h4>{{ tasks|length }}</h4>
+            <p>Задач</p>
+        </div>
+        <div class="stat-item">
+            <h4>{{ project.completed_tasks }}</h4>
+            <p>Выполнено</p>
+        </div>
+        <div class="stat-item">
+            <h4>{{ project.deadline.strftime('%d.%m.%Y') if project.deadline else '—' }}</h4>
+            <p>Дедлайн</p>
+        </div>
+    </div>
+</div>
+
+<div class="team-list">
+    <h3>Команды, участвующие в проекте</h3>
+    {% if teams %}
+    <div>
+        {% for team in teams %}
+        <div class="team-item">
+            <div>
+                <h4 style="margin: 0 0 0.25rem 0;"><a href="/teams/{{ team.id }}" style="color: var(--primary-color); text-decoration: none;">{{ team.name }}</a></h4>
+                <p style="font-size: 0.875rem; color: var(--secondary-color); margin: 0;">{{ team.manager }}</p>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+                {% for user in team.users[:3] %}
+                <div class="member-avatar">{{ user.name[:1] }}</div>
+                {% endfor %}
+                {% if team.users|length > 3 %}
+                <div class="member-avatar" style="background-color: var(--secondary-color);">{{ team.users|length - 3 }}+</div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p style="color: var(--secondary-color);">Команды не найдены.</p>
+    {% endif %}
+</div>
+
+<div class="task-list">
+    <h3>Задачи проекта</h3>
+    <div style="overflow-x: auto;">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Название</th>
+                    <th>Приоритет</th>
+                    <th>Исполнители</th>
+                    <th>Срок</th>
+                    <th>Статус</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for task in tasks %}
+                <tr class="task-item">
+                    <td class="task-info">
+                        <div class="task-name"><a href="/tasks/{{ task.id }}" style="color: var(--dark-color); text-decoration: none;">{{ task.name }}</a></div>
+                        <div class="task-meta">
+                            {% if task.executor_count > 0 %}{{ task.executor_count }} исполнителей{% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <span class="priority-badge priority-{{ task.priority }}">{{ task.priority }}</span>
+                    </td>
+                    <td>
+                        <div style="display: flex; gap: 0.25rem;">
+                            {% for executor in task.executors[:3] %}
+                            <div class="member-avatar" style="width: 24px; height: 24px; font-size: 0.75rem;">{{ executor.name[:1] }}</div>
+                            {% endfor %}
+                        </div>
+                    </td>
+                    <td>{{ task.deadline.strftime('%d.%m.%Y') if task.deadline else '—' }}</td>
+                    <td>{{ task.status }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

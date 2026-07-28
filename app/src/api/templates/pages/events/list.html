@@ -1,0 +1,281 @@
+{# app/src/api/templates/pages/events/list.html #}
+"""
+Страница списка событий.
+
+Отображает список всех событий с возможностью фильтрации и пагинации.
+"""
+
+{% extends "base.html" %}
+
+{% block title %}События{% endblock %}
+
+{% block head %}
+<style>
+    .calendar-container {
+        background-color: white;
+        border-radius: 0.5rem;
+        box-shadow: var(--shadow-sm);
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .calendar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+    
+    .calendar-header h2 {
+        font-size: 1.25rem;
+        font-weight: 600;
+    }
+    
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 0.5rem;
+    }
+    
+    .calendar-day-name {
+        text-align: center;
+        font-weight: 600;
+        color: var(--secondary-color);
+        padding: 0.5rem;
+    }
+    
+    .calendar-day {
+        aspect-ratio: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+        transition: background-color 0.2s;
+    }
+    
+    .calendar-day:hover {
+        background-color: var(--light-color);
+    }
+    
+    .calendar-day.today {
+        background-color: var(--primary-color);
+        color: white;
+    }
+    
+    .calendar-day.event {
+        background-color: #dbeafe;
+        color: #1e40af;
+        position: relative;
+    }
+    
+    .calendar-day.today.event {
+        background-color: white;
+        color: var(--primary-color);
+    }
+    
+    .calendar-day-number {
+        position: relative;
+        z-index: 1;
+    }
+    
+    .calendar-day .event-dot {
+        position: absolute;
+        bottom: 4px;
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background-color: var(--primary-color);
+        z-index: 2;
+    }
+    
+    .event-card {
+        background-color: white;
+        border-radius: 0.5rem;
+        box-shadow: var(--shadow-sm);
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        border: 1px solid var(--border-color);
+    }
+    
+    .event-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 0.75rem;
+    }
+    
+    .event-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        margin: 0;
+    }
+    
+    .event-title a {
+        color: var(--primary-color);
+        text-decoration: none;
+    }
+    
+    .event-meta {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.875rem;
+        color: var(--secondary-color);
+    }
+    
+    .event-meta span {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+    
+    .event-description {
+        color: var(--secondary-color);
+        margin-bottom: 1rem;
+    }
+    
+    .event-actions {
+        display: flex;
+        gap: 1rem;
+    }
+    
+    .type-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    
+    .type-deadline { background-color: #fee2e2; color: #991b1b; }
+    .type-reminder { background-color: #fef3c7; color: #92400e; }
+    .type-holiday { background-color: #dcfce7; color: #166534; }
+    .type-meeting { background-color: #e0e7ff; color: #3730a3; }
+    
+    .filter-bar {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+    }
+    
+    .filter-bar select,
+    .filter-bar input {
+        padding: 0.5rem 0.75rem;
+        border: 1px solid var(--border-color);
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>Календарь событий</h2>
+            <a href="/events/new" class="btn btn-primary">
+                <span class="icon">➕</span>
+                Создать событие
+            </a>
+        </div>
+    </div>
+    
+    <div class="calendar-container">
+        <div class="calendar-header">
+            <h2>{{ current_month_name }} {{ current_year }}</h2>
+            <div style="display: flex; gap: 0.5rem;">
+                <a href="/events?month={{ prev_month }}" class="btn btn-sm btn-secondary">←</a>
+                <a href="/events" class="btn btn-sm btn-secondary">Сегодня</a>
+                <a href="/events?month={{ next_month }}" class="btn btn-sm btn-secondary">→</a>
+            </div>
+        </div>
+        
+        <div class="calendar-grid">
+            <div class="calendar-day-name">Пн</div>
+            <div class="calendar-day-name">Вт</div>
+            <div class="calendar-day-name">Ср</div>
+            <div class="calendar-day-name">Чт</div>
+            <div class="calendar-day-name">Пт</div>
+            <div class="calendar-day-name">Сб</div>
+            <div class="calendar-day-name">Вс</div>
+            
+            {% for day in calendar.days %}
+            <div class="calendar-day {% if day.is_today %}today{% endif %}">
+                <span class="calendar-day-number">{{ day.number }}</span>
+                {% if day.has_event %}
+                <div class="event-dot"></div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <div class="filter-bar">
+        <input type="text" placeholder="Поиск событий..." style="flex: 1; min-width: 200px;">
+        <select id="filter-type">
+            <option value="">Все типы</option>
+            <option value="deadline">Дедлайны</option>
+            <option value="reminder">Напоминания</option>
+            <option value="holiday">Праздники</option>
+            <option value="meeting">Встречи</option>
+        </select>
+        <select id="filter-team">
+            <option value="">Все команды</option>
+            {% for team in teams %}
+            <option value="{{ team.id }}">{{ team.name }}</option>
+            {% endfor %}
+        </select>
+        <button class="btn btn-secondary" onclick="applyFilters()">
+            <span class="icon">🔍</span>
+            Применить
+        </button>
+    </div>
+    
+    {% for event in events %}
+    <div class="event-card">
+        <div class="event-header">
+            <h3 class="event-title"><a href="/events/{{ event.id }}" style="color: var(--dark-color); text-decoration: none;">{{ event.name }}</a></h3>
+            <span class="type-badge type-{{ event.type }}">{{ event.type }}</span>
+        </div>
+        <div class="event-meta">
+            <span>📅 {{ event.start_datetime.strftime('%d.%m.%Y, %H:%M') }} — {{ event.end_datetime.strftime('%H:%M') }}</span>
+            <span>👥 {{ event.team_name or 'Все команды' }}</span>
+        </div>
+        {% if event.description %}
+        <p class="event-description">{{ event.description }}</p>
+        {% endif %}
+        <div class="event-actions">
+            <a href="/events/{{ event.id }}" class="btn btn-sm btn-secondary">Просмотр</a>
+            <a href="/events/{{ event.id }}/edit" class="btn btn-sm btn-primary">Редактировать</a>
+        </div>
+    </div>
+    {% endfor %}
+    
+    {% if pagination.total_pages > 1 %}
+    <div class="pagination" style="justify-content: center; margin-top: 2rem;">
+        {% if pagination.has_previous %}
+        <a href="/events?page={{ pagination.prev_page }}" class="pagination-item">←</a>
+        {% else %}
+        <span class="pagination-item disabled">←</span>
+        {% endif %}
+        
+        {% for page in pagination.pages %}
+        {% if page == pagination.current_page %}
+        <span class="pagination-item active">{{ page }}</span>
+        {% elif page == '...' %}
+        <span class="pagination-item disabled">...</span>
+        {% else %}
+        <a href="/events?page={{ page }}" class="pagination-item">{{ page }}</a>
+        {% endif %}
+        {% endfor %}
+        
+        {% if pagination.has_next %}
+        <a href="/events?page={{ pagination.next_page }}" class="pagination-item">→</a>
+        {% else %}
+        <span class="pagination-item disabled">→</span>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

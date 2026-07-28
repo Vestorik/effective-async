@@ -1,0 +1,303 @@
+{# app/src/api/templates/api_docs.html #}
+"""
+Документация API (альтернатива Swagger UI).
+
+Отображает список всех доступных эндпоинтов с кратким описанием.
+"""
+
+{% extends "base.html" %}
+
+{% block title %}API Документация{% endblock %}
+
+{% block head %}
+<style>
+    .api-section {
+        background-color: white;
+        border-radius: 0.5rem;
+        box-shadow: var(--shadow-sm);
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .api-section h2 {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--border-color);
+        color: var(--primary-color);
+    }
+    
+    .endpoint {
+        padding: 1rem;
+        border: 1px solid var(--border-color);
+        border-radius: 0.375rem;
+        margin-bottom: 0.75rem;
+        transition: background-color 0.2s;
+    }
+    
+    .endpoint:hover {
+        background-color: var(--light-color);
+    }
+    
+    .endpoint-header {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    
+    .method {
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: white;
+    }
+    
+    .method.GET { background-color: #6366f1; }
+    .method.POST { background-color: #16a34a; }
+    .method.PATCH { background-color: #d97706; }
+    .method.DELETE { background-color: #dc2626; }
+    
+    .endpoint-path {
+        font-family: 'Courier New', monospace;
+        font-size: 0.875rem;
+        color: var(--primary-color);
+        flex: 1;
+    }
+    
+    .endpoint-description {
+        color: var(--secondary-color);
+        font-size: 0.875rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .endpoint-params {
+        background-color: var(--light-color);
+        padding: 0.75rem;
+        border-radius: 0.375rem;
+        margin-top: 1rem;
+    }
+    
+    .endpoint-params h4 {
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: var(--dark-color);
+    }
+    
+    .param-item {
+        padding: 0.5rem;
+        border-bottom: 1px solid var(--border-color);
+        font-size: 0.75rem;
+    }
+    
+    .param-item:last-child {
+        border-bottom: none;
+    }
+    
+    .param-name {
+        font-family: 'Courier New', monospace;
+        font-weight: 600;
+        color: var(--primary-color);
+    }
+    
+    .param-type {
+        color: var(--secondary-color);
+    }
+    
+    .param-required {
+        color: #dc2626;
+    }
+    
+    .endpoint-response {
+        background-color: #f0fdf4;
+        padding: 0.75rem;
+        border-radius: 0.375rem;
+        margin-top: 1rem;
+        border-left: 3px solid #22c55e;
+    }
+    
+    .endpoint-response h4 {
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: #166534;
+    }
+    
+    .endpoint-response pre {
+        background-color: #0f172a;
+        color: #e2e8f0;
+        padding: 0.75rem;
+        border-radius: 0.375rem;
+        font-size: 0.75rem;
+        overflow-x: auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2>Документация API</h2>
+        <p style="color: var(--secondary-color);">Список всех доступных эндпоинтов</p>
+    </div>
+    
+    <div class="api-section">
+        <h2>Пользователи</h2>
+        
+        <div class="endpoint">
+            <div class="endpoint-header">
+                <span class="method POST">POST</span>
+                <span class="endpoint-path">/users/users</span>
+            </div>
+            <p class="endpoint-description">Создаёт нового пользователя.</p>
+            <div class="endpoint-params">
+                <h4>Параметры запроса:</h4>
+                <div class="param-item">
+                    <span class="param-name">username</span> <span class="param-type">string</span> <span class="param-required">*</span>
+                </div>
+                <div class="param-item">
+                    <span class="param-name">email</span> <span class="param-type">email</span> <span class="param-required">*</span>
+                </div>
+                <div class="param-item">
+                    <span class="param-name">password</span> <span class="param-type">string</span> <span class="param-required">*</span>
+                </div>
+                <div class="param-item">
+                    <span class="param-name">role</span> <span class="param-type">string</span>
+                </div>
+                <div class="param-item">
+                    <span class="param-name">team_id</span> <span class="param-type">UUID</span>
+                </div>
+            </div>
+            <div class="endpoint-response">
+                <h4>Пример ответа (201 Created):</h4>
+                <pre>{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "username": "john_doe",
+  "email": "john@example.com",
+  "role": "member",
+  "created_at": "2026-01-01T12:00:00"
+}</pre>
+            </div>
+        </div>
+    </div>
+    
+    <div class="api-section">
+        <h2>Команды</h2>
+        
+        <div class="endpoint">
+            <div class="endpoint-header">
+                <span class="method GET">GET</span>
+                <span class="endpoint-path">/teams/{team_id}</span>
+            </div>
+            <p class="endpoint-description">Получить команду по ID (кэш 10 минут).</p>
+        </div>
+        
+        <div class="endpoint">
+            <div class="endpoint-header">
+                <span class="method POST">POST</span>
+                <span class="endpoint-path">/teams</span>
+            </div>
+            <p class="endpoint-description">Создать новую команду.</p>
+        </div>
+        
+        <div class="endpoint">
+            <div class="endpoint-header">
+                <span class="method GET">GET</span>
+                <span class="endpoint-path">/teams</span>
+            </div>
+            <p class="endpoint-description">Получить все команды с пагинацией (кэш 5 минут).</p>
+        </div>
+    </div>
+    
+    <div class="api-section">
+        <h2>Проекты</h2>
+        
+        <div class="endpoint">
+            <div class="endpoint-header">
+                <span class="method GET">GET</span>
+                <span class="endpoint-path">/projects/{project_id}</span>
+            </div>
+            <p class="endpoint-description">Получить проект по ID (кэш 10 минут).</p>
+        </div>
+        
+        <div class="endpoint">
+            <div class="endpoint-header">
+                <span class="method POST">POST</span>
+                <span class="endpoint-path">/projects</span>
+            </div>
+            <p class="endpoint-description">Создать новый проект.</p>
+        </div>
+    </div>
+    
+    <div class="api-section">
+        <h2>Задачи</h2>
+        
+        <div class="endpoint">
+            <div class="endpoint-header">
+                <span class="method GET">GET</span>
+                <span class="endpoint-path">/tasks/{task_id}</span>
+            </div>
+            <p class="endpoint-description">Получить задачу по ID (кэш 10 минут).</p>
+        </div>
+        
+        <div class="endpoint">
+            <div class="endpoint-header">
+                <span class="method POST">POST</span>
+                <span class="endpoint-path">/teams/{team_id}/tasks</span>
+            </div>
+            <p class="endpoint-description">Создать новую задачу в команде.</p>
+        </div>
+        
+        <div class="endpoint">
+            <div class="endpoint-header">
+                <span class="method POST">POST</span>
+                <span class="endpoint-path">/tasks/{task_id}/executors</span>
+            </div>
+            <p class="endpoint-description">Добавить исполнителя к задаче.</p>
+        </div>
+    </div>
+    
+    <div class="api-section">
+        <h2>События</h2>
+        
+        <div class="endpoint">
+            <div class="endpoint-header">
+                <span class="method GET">GET</span>
+                <span class="endpoint-path">/events/{event_id}</span>
+            </div>
+            <p class="endpoint-description">Получить событие по ID (кэш 10 минут).</p>
+        </div>
+        
+        <div class="endpoint">
+            <div class="endpoint-header">
+                <span class="method POST">POST</span>
+                <span class="endpoint-path">/events</span>
+            </div>
+            <p class="endpoint-description">Создать новое событие.</p>
+        </div>
+    </div>
+    
+    <div class="api-section">
+        <h2>Встречи</h2>
+        
+        <div class="endpoint">
+            <div class="endpoint-header">
+                <span class="method GET">GET</span>
+                <span class="endpoint-path">/meetings/{meeting_id}</span>
+            </div>
+            <p class="endpoint-description">Получить встречу по ID (кэш 10 минут).</p>
+        </div>
+        
+        <div class="endpoint">
+            <div class="endpoint-header">
+                <span class="method POST">POST</span>
+                <span class="endpoint-path">/meetings</span>
+            </div>
+            <p class="endpoint-description">Создать новую встречу.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

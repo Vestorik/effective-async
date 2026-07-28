@@ -1,0 +1,150 @@
+{# app/src/api/templates/pages/projects/list.html #}
+"""
+Страница списка проектов.
+
+Отображает таблицу всех проектов с возможностью пагинации и фильтрации.
+"""
+
+{% extends "base.html" %}
+
+{% block title %}Проекты{% endblock %}
+
+{% block head %}
+<style>
+    .projects-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .project-card {
+        background-color: white;
+        border-radius: 0.5rem;
+        box-shadow: var(--shadow-sm);
+        padding: 1.5rem;
+        transition: transform 0.2s, box-shadow 0.2s;
+        border: 1px solid var(--border-color);
+    }
+    
+    .project-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+    
+    .project-card h3 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: var(--primary-color);
+    }
+    
+    .project-card p {
+        color: var(--secondary-color);
+        font-size: 0.875rem;
+        margin-bottom: 1rem;
+    }
+    
+    .project-meta {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.75rem;
+        color: var(--secondary-color);
+    }
+    
+    .project-meta span {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+    
+    .filter-bar {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+    }
+    
+    .filter-bar select,
+    .filter-bar input {
+        padding: 0.5rem 0.75rem;
+        border: 1px solid var(--border-color);
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>Все проекты</h2>
+            <a href="/projects/new" class="btn btn-primary">
+                <span class="icon">➕</span>
+                Создать проект
+            </a>
+        </div>
+    </div>
+    
+    <div class="filter-bar">
+        <input type="text" placeholder="Поиск проектов..." style="flex: 1; min-width: 200px;">
+        <select id="filter-team">
+            <option value="">Все команды</option>
+            {% for team in teams %}
+            <option value="{{ team.id }}">{{ team.name }}</option>
+            {% endfor %}
+        </select>
+        <select id="filter-status">
+            <option value="">Все статусы</option>
+            <option value="active">Активные</option>
+            <option value="completed">Завершённые</option>
+            <option value="on_hold">На паузе</option>
+        </select>
+        <button class="btn btn-secondary" onclick="applyFilters()">
+            <span class="icon">🔍</span>
+            Применить
+        </button>
+    </div>
+    
+    <div class="projects-grid">
+        {% for project in projects %}
+        <div class="project-card">
+            <h3><a href="/projects/{{ project.id }}" style="color: var(--primary-color); text-decoration: none;">{{ project.name }}</a></h3>
+            <p>{{ project.description or 'Описание отсутствует' }}</p>
+            <div class="project-meta">
+                <span>👥 {{ project.team_count }} команд</span>
+                <span>📝 {{ project.task_count }} задач</span>
+                <span>📅 {{ project.created_at.strftime('%d.%m.%Y') }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    {% if pagination.total_pages > 1 %}
+    <div class="pagination" style="justify-content: center; margin-top: 2rem;">
+        {% if pagination.has_previous %}
+        <a href="/projects?page={{ pagination.prev_page }}" class="pagination-item">←</a>
+        {% else %}
+        <span class="pagination-item disabled">←</span>
+        {% endif %}
+        
+        {% for page in pagination.pages %}
+        {% if page == pagination.current_page %}
+        <span class="pagination-item active">{{ page }}</span>
+        {% elif page == '...' %}
+        <span class="pagination-item disabled">...</span>
+        {% else %}
+        <a href="/projects?page={{ page }}" class="pagination-item">{{ page }}</a>
+        {% endif %}
+        {% endfor %}
+        
+        {% if pagination.has_next %}
+        <a href="/projects?page={{ pagination.next_page }}" class="pagination-item">→</a>
+        {% else %}
+        <span class="pagination-item disabled">→</span>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

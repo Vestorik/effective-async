@@ -1,0 +1,274 @@
+{# app/src/api/templates/pages/teams/detail.html #}
+"""
+Страница детальной информации о команде.
+
+Отображает информацию о команде, списках участников, проектов и задач.
+"""
+
+{% extends "base.html" %}
+
+{% block title %}{{ team.name }}{% endblock %}
+
+{% block head %}
+<style>
+    .team-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 2rem;
+    }
+    
+    .team-info {
+        background-color: white;
+        border-radius: 0.5rem;
+        box-shadow: var(--shadow-sm);
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .team-info h1 {
+        font-size: 2rem;
+        font-weight: 600;
+        color: var(--primary-color);
+        margin-bottom: 1rem;
+    }
+    
+    .team-info p {
+        color: var(--secondary-color);
+        margin-bottom: 1rem;
+    }
+    
+    .team-stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+    
+    .stat-item {
+        background-color: var(--light-color);
+        padding: 1rem;
+        border-radius: 0.5rem;
+        text-align: center;
+    }
+    
+    .stat-item h4 {
+        font-size: 2rem;
+        font-weight: bold;
+        color: var(--primary-color);
+        margin-bottom: 0.5rem;
+    }
+    
+    .stat-item p {
+        font-size: 0.875rem;
+        color: var(--secondary-color);
+        margin: 0;
+    }
+    
+    .member-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background-color: var(--primary-color);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        font-weight: 500;
+    }
+    
+    .project-card,
+    .task-card {
+        background-color: white;
+        border-radius: 0.5rem;
+        box-shadow: var(--shadow-sm);
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .project-card h3,
+    .task-card h3 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .project-item,
+    .task-item {
+        padding: 1rem;
+        border: 1px solid var(--border-color);
+        border-radius: 0.375rem;
+        margin-bottom: 0.75rem;
+        transition: background-color 0.2s;
+    }
+    
+    .project-item:hover,
+    .task-item:hover {
+        background-color: var(--light-color);
+    }
+    
+    .project-item h4,
+    .task-item h4 {
+        font-size: 1rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .project-item h4 a,
+    .task-item h4 a {
+        color: var(--primary-color);
+        text-decoration: none;
+    }
+    
+    .project-meta,
+    .task-meta {
+        font-size: 0.75rem;
+        color: var(--secondary-color);
+    }
+    
+    .priority-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    
+    .priority-high { background-color: #fee2e2; color: #991b1b; }
+    .priority-medium { background-color: #fef3c7; color: #92400e; }
+    .priority-low { background-color: #dcfce7; color: #166534; }
+    
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+    }
+    
+    .member-list {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    
+    .role-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        background-color: var(--light-color);
+        color: var(--secondary-color);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="team-header">
+    <div>
+        <a href="/teams" class="btn btn-sm btn-secondary" style="margin-bottom: 1rem;">
+            <span class="icon">←</span>
+            Назад к командам
+        </a>
+    </div>
+    <div class="action-buttons">
+        <a href="/teams/{{ team.id }}/edit" class="btn btn-secondary">
+            <span class="icon">✏️</span>
+            Редактировать
+        </a>
+        <a href="/teams/{{ team.id }}/delete" class="btn btn-danger" onclick="return confirm('Вы уверены, что хотите удалить команду?');">
+            <span class="icon">🗑️</span>
+            Удалить
+        </a>
+    </div>
+</div>
+
+<div class="team-info">
+    <h1>{{ team.name }}</h1>
+    <p>Создана: {{ team.created_at.strftime('%d.%m.%Y') }}</p>
+    
+    <div class="team-stats">
+        <div class="stat-item">
+            <h4>{{ team.member_count }}</h4>
+            <p>Участников</p>
+        </div>
+        <div class="stat-item">
+            <h4>{{ team.project_count }}</h4>
+            <p>Проектов</p>
+        </div>
+        <div class="stat-item">
+            <h4>{{ team.task_count }}</h4>
+            <p>Задач</p>
+        </div>
+    </div>
+    
+    <div style="margin-top: 2rem;">
+        <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem;">Менеджер команды:</h3>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <div class="member-avatar" style="background-color: var(--primary-color);">{{ team.manager_name[:1] }}</div>
+            <div>
+                <h4 style="font-size: 1rem; margin: 0;">{{ team.manager_name }}</h4>
+                <p style="font-size: 0.875rem; color: var(--secondary-color); margin: 0;">{{ team.manager_email }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div style="background-color: white; border-radius: 0.5rem; box-shadow: var(--shadow-sm); padding: 1.5rem;">
+    <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color);">Участники команды</h3>
+    <div class="member-list">
+        {% for user in team.members %}
+        <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.375rem; flex: 1; min-width: 200px;">
+            <div class="member-avatar">{{ user.name[:1] }}</div>
+            <div style="flex: 1;">
+                <h4 style="font-size: 0.875rem; margin: 0;">{{ user.name }}</h4>
+                <p style="font-size: 0.75rem; color: var(--secondary-color); margin: 0;">{{ user.email }}</p>
+            </div>
+            {% if user.is_manager %}
+            <span class="role-badge">Менеджер</span>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="project-card">
+    <h3>Проекты команды</h3>
+    {% if team.projects %}
+    <div>
+        {% for project in team.projects %}
+        <div class="project-item">
+            <h4><a href="/projects/{{ project.id }}" style="color: var(--primary-color); text-decoration: none;">{{ project.name }}</a></h4>
+            <p style="font-size: 0.875rem; color: var(--secondary-color);">{{ project.description or 'Описание отсутствует' }}</p>
+            <div class="project-meta">
+                <span>📅 {{ project.created_at.strftime('%d.%m.%Y') }}</span>
+                <span>📝 {{ project.task_count }} задач</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p style="color: var(--secondary-color);">Проекты не найдены.</p>
+    {% endif %}
+</div>
+
+<div class="task-card">
+    <h3>Задачи команды</h3>
+    {% if team.tasks %}
+    <div>
+        {% for task in team.tasks[:5] %}
+        <div class="task-item">
+            <h4><a href="/tasks/{{ task.id }}" style="color: var(--primary-color); text-decoration: none;">{{ task.name }}</a></h4>
+            <div class="task-meta">
+                <span class="priority-badge priority-{{ task.priority }}">{{ task.priority }}</span>
+                <span>📅 {{ task.deadline.strftime('%d.%m.%Y') if task.deadline else '—' }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <a href="/teams/{{ team.id }}/tasks" style="display: block; text-align: center; color: var(--primary-color); text-decoration: none; margin-top: 1rem;">Посмотреть все зада��и →</a>
+    {% else %}
+    <p style="color: var(--secondary-color);">Задачи не найдены.</p>
+    {% endif %}
+</div>
+{% endblock %}

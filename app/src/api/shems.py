@@ -41,15 +41,6 @@ class TimeEventSheme(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class TeamSchema(BaseModelSheme):
-    """
-    Схема команды для выхода (GET).
-
-    Содержит только безопасные поля: id, временные метки и название.
-    Не включает вложенные сущности (users, projects), чтобы избежать рекурсии.
-    """
-
-    name: str
 
 
 class UserBaseSheme(BaseModelSheme):
@@ -115,6 +106,19 @@ class UserOutSheme(BaseModelSheme):
     role: str
     team_id: Optional[UUID] = Field(default=None, description="Идентификатор команды (если пользователь в команде).")
 
+
+class TeamSchema(BaseModelSheme):
+    """
+    Схема команды для выхода (GET).
+
+    Содержит только безопасные поля: id, временные метки и название.
+    Не включает вложенные сущности (users, projects), чтобы избежать рекурсии.
+    """
+
+    name: str
+
+class TeamCreate(TeamSchema):
+    manager_id : UUID
 
 class TeamWithUsersSheme(TeamSchema):
     """
