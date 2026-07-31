@@ -203,12 +203,6 @@ class TimeEventMixin:
     )
 
 
-class RoleModel(Enum):
-    ADMIN = "admin"
-    MANAGER = "manager"
-    USER = "user"
-
-
 class UserModel(BaseModel):
     """
     Модель пользователя системы.

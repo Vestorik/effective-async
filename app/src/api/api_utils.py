@@ -6,7 +6,9 @@
 """
 
 from typing import Annotated
+
 from fastapi import Depends, Request
+
 from app.src.dal.main import DataManager
 
 
@@ -33,5 +35,4 @@ def get_data_manager(request: Request) -> DataManager:
 
 # Alias для аннотаций
 DependsDataManager = Annotated[DataManager, Depends(get_data_manager)]
-
 

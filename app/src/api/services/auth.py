@@ -1,4 +1,3 @@
-
 """
 Модуль аутентификации и авторизации.
 
@@ -13,10 +12,13 @@
 - Репозитории создаются в handlers.py через uow.users, uow.teams и т.д.
 - Убраны явные commit/rollback — они управляются в UnitOfWork.__aexit__().
 """
-from datetime import datetime, timedelta, timezone
+
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from enum import Enum
 from logging import getLogger
 from pathlib import Path
-from typing import Annotated, List
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, status
@@ -28,6 +30,7 @@ from passlib.handlers.argon2 import argon2
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.src.api.api_utils import DependsDataManager
 from app.src.api.exceptions import InvalidCredentials, UserNotFound
 from app.src.api.shems import UserCreateSheme, UserOutSheme
 from app.src.dal.database.models import UserModel
@@ -39,20 +42,24 @@ pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 class AuthConfig(BaseSettings):
     """Настройки JWT и безопасности."""
-    
+
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parents[3] / "deploy" / ".env",
         env_file_encoding="utf-8",
         extra="allow",
-        env_prefix="AUTH_",  
+        env_prefix="AUTH_",
     )
 
     AUTH_SECRET_KEY: str = Field(..., env="AUTH_SECRET_KEY")
     AUTH_TOKEN_EXPIRY_MINUTES: int = Field(default=60, env="AUTH_TOKEN_EXPIRY_MINUTES")
-    AUTH_REFRESH_TOKEN_EXPIRY_DAYS: int = Field(default=7, env="AUTH_REFRESH_TOKEN_EXPIRY_DAYS")
+    AUTH_REFRESH_TOKEN_EXPIRY_DAYS: int = Field(
+        default=7, env="AUTH_REFRESH_TOKEN_EXPIRY_DAYS"
+    )
     AUTH_ALGORITHM: str = "HS256"
 
+
 MAIN_AUTH_CONFIG = AuthConfig()
+
 
 class AuthService:
     """
@@ -72,8 +79,8 @@ class AuthService:
     def __init__(self):
         self.secret_key = MAIN_AUTH_CONFIG.AUTH_SECRET_KEY
         self.token_expiry_minutes = MAIN_AUTH_CONFIG.AUTH_TOKEN_EXPIRY_MINUTES
-        self.refresh_token_expray_days= MAIN_AUTH_CONFIG.AUTH_REFRESH_TOKEN_EXPIRY_DAYS
-        self.auth_algorithm=MAIN_AUTH_CONFIG.AUTH_ALGORITHM
+        self.refresh_token_expray_days = MAIN_AUTH_CONFIG.AUTH_REFRESH_TOKEN_EXPIRY_DAYS
+        self.auth_algorithm = MAIN_AUTH_CONFIG.AUTH_ALGORITHM
 
     async def register(
         self,
@@ -101,8 +108,8 @@ class AuthService:
             hashed_password=hashed_password,
             role=user_data.role,
             team_id=user_data.team_id,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
         await user_repo.create(user)
         return UserOutSheme.model_validate(user)
@@ -132,7 +139,9 @@ class AuthService:
         if not user or not pwd_context.verify(password, user.hashed_password):
             raise InvalidCredentials()
 
-        expires_at = datetime.now(timezone.utc) + timedelta(minutes=self.token_expiry_minutes)
+        expires_at = datetime.now(UTC) + timedelta(
+            minutes=self.token_expiry_minutes
+        )
         payload = {
             "sub": str(user.id),
             "email": user.email,
@@ -189,7 +198,7 @@ class AuthService:
         if not user:
             raise UserNotFound()
         return user
-    
+
     async def get_token_expiry(self, token: str) -> datetime:
         """
         Извлекает срок окончания действия токена (для кэширования/отображения на клиенте).
@@ -204,15 +213,19 @@ class AuthService:
             InvalidCredentials: Если токен недействителен.
         """
         try:
-            payload = decode(token, self.secret_key, algorithms=["HS256"], options={"verify_exp": False})
+            payload = decode(
+                token,
+                self.secret_key,
+                algorithms=["HS256"],
+                options={"verify_exp": False},
+            )
             exp = payload.get("exp")
             if not exp:
                 raise InvalidCredentials()
-            return datetime.fromtimestamp(exp, tz=timezone.utc)
+            return datetime.fromtimestamp(exp, tz=UTC)
         except PyJWTError:
             raise InvalidCredentials()
-        
-        
+
     async def refresh_token(
         self,
         user_repo: UserRepository,
@@ -247,15 +260,20 @@ class AuthService:
                 "sub": str(user.id),
                 "email": user.email,
                 "role": user.role,
-                "exp": datetime.now(timezone.utc) + timedelta(minutes=self.token_expiry_minutes),
+                "exp": datetime.now(UTC)
+                + timedelta(minutes=self.token_expiry_minutes),
             }
             new_refresh_payload = {
                 "sub": str(user.id),
                 "type": "refresh",
-                "exp": datetime.now(timezone.utc) + timedelta(days=7),
+                "exp": datetime.now(UTC) + timedelta(days=7),
             }
-            new_access_token = encode(new_access_payload, self.secret_key, algorithm="HS256")
-            new_refresh_token = encode(new_refresh_payload, self.secret_key, algorithm="HS256")
+            new_access_token = encode(
+                new_access_payload, self.secret_key, algorithm="HS256"
+            )
+            new_refresh_token = encode(
+                new_refresh_payload, self.secret_key, algorithm="HS256"
+            )
 
             # Обновляем хэш refresh_token в БД
             user.refresh_token_hash = argon2.hash(refresh_token)
@@ -268,7 +286,6 @@ class AuthService:
             }
         except PyJWTError:
             raise InvalidCredentials()
-
 
     async def logout(
         self,
@@ -290,53 +307,67 @@ class AuthService:
             raise UserNotFound()
         user.refresh_token_hash = None
         await user_repo.update(user)
-        
-        
+
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
 async def get_current_user_dep(
-    token: Annotated[str, Depends(oauth2_scheme)],
-    user_repo: UserRepository
-    ) -> "UserModel":
-        """
-        Получает текущего пользователя из JWT-токена.
+    token: Annotated[str, Depends(oauth2_scheme)], db_manager: DependsDataManager
+) -> UserModel:
+    """
+    Получает текущего пользователя из JWT-токена.
 
-        Аргументы:
-            token (str): JWT-токен.
-            user_repo (UserRepository): Репозиторий пользователей.
+    Аргументы:
+        token (str): JWT-токен.
+        user_repo (UserRepository): Репозиторий пользователей.
 
-        Возвращает:
-            UserModel: Пользователь.
+    Возвращает:
+        UserModel: Пользователь.
 
-        Исключения:
-            HTTPException: 401, если токен недействителен.
-        """
-        auth_service = AuthService()
-        try:
-            return await auth_service.get_current_user(user_repo, token)
-        except Exception:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Не удалось аутентифицировать пользователя",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-    
-        
-        
+    Исключения:
+        HTTPException: 401, если токен недействителен.
+    """
+    try:
+        async with db_manager() as uow:
+            auth_service = AuthService()
+            return await auth_service.get_current_user(uow.users, token)
 
-class RoleChecker:
-    """Проверяет наличие у пользователя одной из требуемых ролей."""
-    def __init__(self, allowed_roles: List[str]):
-        self.allowed_roles = allowed_roles
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Не удалось аутентифицировать пользователя",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-    async def __call__(
-        self,
-        user: UserModel,
-    ) -> UserModel:
-        if user.role not in self.allowed_roles:
+
+class RoleType(Enum):
+    ADMIN = "admin"
+    MANAGER = "manager"
+    USER = "user"
+    ANY = "ANY"
+
+
+def require_permissions(
+    # permissions: list[Permission] | None, // Реализовать в будущем
+    role: list[RoleType] | None = None,
+) -> Callable:
+
+    if role is None:
+        role = [
+            RoleType.ANY,
+        ]
+
+    async def check_permissions(
+        user_model: Annotated[UserModel, Depends(get_current_user_dep)],
+    ) -> UUID:
+        user_role = user_model.role
+        if user_role not in [r.value for r in role]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Недостаточно прав для доступа",
             )
-        return user
+
+        return user_model.id  # ty:ignore[invalid-return-type]
+
+    return check_permissions
