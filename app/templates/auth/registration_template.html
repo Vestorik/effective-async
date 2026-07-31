@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Регистрация пользователя</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f6f8;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+        h2 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 1.5rem;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #555;
+            font-weight: 500;
+        }
+        input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+            box-sizing: border-box; /* Важно для padding */
+        }
+        input:focus {
+            border-color: #007bff;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+        }
+        .error-messages {
+            color: #dc3545;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+        button {
+            width: 100%;
+            padding: 0.75rem;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .footer-text {
+            text-align: center;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+        .footer-text a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        .footer-text a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Регистрация</h2>
+        
+        <!-- 
+            Метод POST и action зависят от вашего роутинга. 
+            В FastAPI обычно используется Jinja2Renderer, и action указывает на эндпоинт обработки.
+        -->
+        <form method="POST" action="/auth/register" id="registrationForm">
+            
+            <!-- Имя пользователя -->
+            <div class="form-group">
+                <label for="username">Имя пользователя</label>
+                <input 
+                    type="text" 
+                    id="username" 
+                    name="username" 
+                    required 
+                    minlength="3" 
+                    maxlength="255"
+                    placeholder="Введите имя пользователя"
+                    autocomplete="username"
+                >
+                {% if errors.username %}
+                <div class="error-messages">{{ errors.username }}</div>
+                {% endif %}
+            </div>
+
+            <!-- Email -->
+            <div class="form-group">
+                <label for="email">Электронная почта</label>
+                <input 
+                    type="email" 
+                    id="email" 
+                    name="email" 
+                    required 
+                    placeholder="example@example.com"
+                    autocomplete="email"
+                >
+                {% if errors.email %}
+                <div class="error-messages">{{ errors.email }}</div>
+                {% endif %}
+            </div>
+
+            <!-- Пароль -->
+            <div class="form-group">
+                <label for="password">Пароль</label>
+                <input 
+                    type="password" 
+                    id="password" 
+                    name="password" 
+                    required 
+                    minlength="8" 
+                    placeholder="Минимум 8 символов"
+                    autocomplete="new-password"
+                >
+                {% if errors.password %}
+                <div class="error-messages">{{ errors.password }}</div>
+                {% endif %}
+            </div>
+
+            <!-- Подтверждение пароля -->
+            <div class="form-group">
+                <label for="confirm_password">Подтвердите пароль</label>
+                <input 
+                    type="password" 
+                    id="confirm_password" 
+                    name="confirm_password" 
+                    required 
+                    minlength="8" 
+                    placeholder="Повторите пароль"
+                    autocomplete="new-password"
+                >
+                {% if errors.confirm_password %}
+                <div class="error-messages">{{ errors.confirm_password }}</div>
+                {% endif %}
+            </div>
+
+            <!-- Скрытое поле CSRF токена (если используется защита от CSRF) -->
+            <!-- В FastAPI с Jinja2 этот механизм нужно реализовывать вручную или через middleware -->
+            {% if csrf_token %}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            {% endif %}
+
+            <button type="submit">Зарегистрироваться</button>
+        </form>
+
+        <div class="footer-text">
+            Уже есть аккаунт? <a href="/auth/login">Войти</a>
+        </div>
+    </div>
+
+    <script>
+        // Клиентская валидация для подтверждения совпадения паролей
+        document.getElementById('registrationForm').addEventListener('submit', function(event) {
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirm_password').value;
+            const confirmErrorDiv = document.querySelector('#confirm_password + .error-messages') || 
+                                    document.createElement('div');
+            
+            // Очищаем предыдущие ошибки JS
+            const existingError = confirmErrorDiv.classList.contains('error-messages');
+            if (existingError) confirmErrorDiv.remove();
+
+            if (password !== confirmPassword) {
+                event.preventDefault();
+                confirmErrorDiv.textContent = 'Пароли не совпадают.';
+                confirmErrorDiv.className = 'error-messages';
+                document.getElementById('confirm_password').after(confirmErrorDiv);
+            }
+        });
+    </script>
+</body>
+</html>

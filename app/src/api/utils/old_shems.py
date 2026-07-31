@@ -1,9 +1,10 @@
 from datetime import datetime
+from typing import List, Optional
 from uuid import UUID
-from pydantic import BaseModel, Field, EmailStr, field_validator
-from typing import Optional, List
-from app.src.base.utils import check_time_range
 
+from pydantic import BaseModel, EmailStr, Field, field_validator
+
+from app.src.base.utils import check_time_range
 
 
 class BaseModelSheme(BaseModel):
@@ -16,10 +17,14 @@ class BaseModelSheme(BaseModel):
     Модель не содержит бизнес-логики, только структуру данных для API.
     """
 
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+
     model_config = {
-        "from_attributes": True,     # ORM-совместимость (aiosqlite/asyncpg/SQLAlchemy)
-        "extra": "forbid",            # Запрет лишних полей во входных данных
-        "validate_assignment": True   # Валидация при изменении поля после создания
+        "from_attributes": True,  # ORM-совместимость (aiosqlite/asyncpg/SQLAlchemy)
+        "extra": "forbid",  # Запрет лишних полей во входных данных
+        "validate_assignment": True,  # Валидация при изменении поля после создания
     }
 
 
@@ -37,8 +42,6 @@ class TimeEventSheme(BaseModel):
     model_config = {"from_attributes": True}
 
 
-
-
 class UserBaseSheme(BaseModelSheme):
     """
     Базовая схема пользователя для входа/создания/обновления.
@@ -49,7 +52,9 @@ class UserBaseSheme(BaseModelSheme):
     username: str = Field(min_length=2, max_length=50)
     email: EmailStr
     role: str
-    team_id: Optional[UUID] = Field(default=None, description="Внешний ключ на команду (необязательный).")
+    team_id: Optional[UUID] = Field(
+        default=None, description="Внешний ключ на команду (необязательный)."
+    )
 
 
 class UserCreateSheme(UserBaseSheme):
@@ -60,8 +65,13 @@ class UserCreateSheme(UserBaseSheme):
     Содержит пароль (как строку), который будет хэширован в сервисе.
     """
 
-    password: str = Field(min_length=8, max_length=50, description="Открытый пароль (не сохраняется в базе).")
-    
+    password: str = Field(
+        min_length=8,
+        max_length=50,
+        description="Открытый пароль (не сохраняется в базе).",
+    )
+
+
 class UserUpdateSheme(BaseModelSheme):
     """
     Схема обновления пользователя.
@@ -74,8 +84,9 @@ class UserUpdateSheme(BaseModelSheme):
     username: Optional[str] = Field(default=None, min_length=2, max_length=50)
     email: Optional[EmailStr] = None
     role: Optional[str] = None
-    team_id: Optional[UUID] = Field(default=None, description="Внешний ключ на команду (необязательный).")
-
+    team_id: Optional[UUID] = Field(
+        default=None, description="Внешний ключ на команду (необязательный)."
+    )
 
 
 class UserSheme(UserBaseSheme):
@@ -100,7 +111,9 @@ class UserOutSheme(BaseModelSheme):
     username: str
     email: EmailStr
     role: str
-    team_id: Optional[UUID] = Field(default=None, description="Идентификатор команды (если пользователь в команде).")
+    team_id: Optional[UUID] = Field(
+        default=None, description="Идентификатор команды (если пользователь в команде)."
+    )
 
 
 class TeamSchema(BaseModelSheme):
@@ -113,8 +126,10 @@ class TeamSchema(BaseModelSheme):
 
     name: str
 
+
 class TeamCreate(TeamSchema):
-    manager_id : UUID
+    manager_id: UUID
+
 
 class TeamWithUsersSheme(TeamSchema):
     """
@@ -125,6 +140,7 @@ class TeamWithUsersSheme(TeamSchema):
     """
 
     users: List["UserOutSheme"]
+
 
 class TeamUpdateSheme(BaseModel):
     """
@@ -149,16 +165,22 @@ class ProjectSchema(BaseModelSheme):
 
 class ProjectCreate(BaseModel):
     """Входная схема создания проекта."""
+
     name: str = Field(..., min_length=2, max_length=255)
     description: Optional[str] = Field(default=None, max_length=1024)
-    team_ids: Optional[List[UUID]] = Field(default=None, description="Список ID команд, участвующих в проекте.")
+    team_ids: Optional[List[UUID]] = Field(
+        default=None, description="Список ID команд, участвующих в проекте."
+    )
 
 
 class ProjectUpdate(BaseModel):
     """Входная схема обновления проекта."""
+
     name: Optional[str] = Field(default=None, min_length=2, max_length=255)
     description: Optional[str] = Field(default=None, max_length=1024)
-    team_ids: Optional[List[UUID]] = Field(default=None, description="Список ID команд, участвующих в проекте.")
+    team_ids: Optional[List[UUID]] = Field(
+        default=None, description="Список ID команд, участвующих в проекте."
+    )
 
 
 class TeamWithProjectsSheme(TeamSchema):
@@ -170,8 +192,24 @@ class TeamWithProjectsSheme(TeamSchema):
 
     team_projects: List["ProjectSchema"]
 
+
+class TaskExecutorOutSheme(BaseModelSheme):
+    """
+    Схема исполнителя задачи для выхода.
+
+    Содержит user_id, estimate и мета-данные.
+    """
+
+    task_id: UUID
+    user_id: UUID
+    estimate: Optional[int] = Field(
+        default=None, description="Оценка исполнителя задачи"
+    )
+
+
 class AddExecutor(BaseModel):
     """Входная схема для добавления исполнителя."""
+
     user_id: UUID
     estimate: Optional[int] = None
 
@@ -180,6 +218,7 @@ class TaskUpdateSheme(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     priority: Optional[str] = None
+
 
 class TaskOutSheme(BaseModelSheme):
     """
@@ -191,8 +230,14 @@ class TaskOutSheme(BaseModelSheme):
 
     name: str
     description: Optional[str] = Field(default=None, description="Описание задачи.")
-    project_id: Optional[UUID] = Field(default=None, description="Идентификатор проекта (если задача привязана к проекту).")
-    parent_id: Optional[UUID] = Field(default=None, description="Идентификатор родительской задачи (если задача подзадача).")
+    project_id: Optional[UUID] = Field(
+        default=None,
+        description="Идентификатор проекта (если задача привязана к проекту).",
+    )
+    parent_id: Optional[UUID] = Field(
+        default=None,
+        description="Идентификатор родительской задачи (если задача подзадача).",
+    )
 
 
 class TaskWithExecutorsSheme(TaskOutSheme):
@@ -207,6 +252,7 @@ class TaskWithExecutorsSheme(TaskOutSheme):
 
 class TaskCreate(BaseModel):
     """Входная схема создания задачи."""
+
     name: str
     description: Optional[str] = None
     priority: str = "medium"  # low, medium, high
@@ -216,7 +262,9 @@ class TaskCreate(BaseModel):
 
 class TaskCreateOutSheme(TaskOutSheme):
     """Схема для выхода при создании задачи."""
+
     pass
+
 
 class MeetingSheme(TimeEventSheme):
     """
@@ -240,13 +288,13 @@ class EventSheme(TimeEventSheme):
     id: UUID
     created_at: datetime
     updated_at: datetime
-    
-    
+
 
 class EventCreate(BaseModel):
     """
     Схема создания события (дедлайн, напоминание).
     """
+
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = Field(default=None, max_length=512)
     start_datetime: datetime
@@ -267,6 +315,7 @@ class MeetingCreate(BaseModel):
     """
     Схема создания встречи.
     """
+
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = Field(default=None, max_length=512)
     start_datetime: datetime
@@ -281,69 +330,10 @@ class MeetingCreate(BaseModel):
         except ValueError as e:
             raise ValueError(f"Ошибка валидации времени: {e}")
         return v
-    
 
-class TaskExecutorOutSheme(BaseModelSheme):
-    """
-    Схема исполнителя задачи для выхода.
-    """
-    task_id: UUID
-    user_id: UUID
-    estimate: Optional[int] = Field(default=None, description="Оценка исполнителя задачи")
-    # Добавляем имя пользователя для отображения в UI без дополнительных запросов
-    username: Optional[str] = Field(default=None, description="Имя пользователя")
-    
-    model_config = {"from_attributes": True}
 
-class TaskOutSheme(BaseModelSheme):
-    """
-    Схема задачи для выхода.
-    """
-    name: str
-    description: Optional[str] = Field(default=None)
-    project_id: Optional[UUID] = Field(default=None)
-    parent_id: Optional[UUID] = Field(default=None)
-    status: Optional[str] = Field(default=None) # Предполагаем наличие статуса
-    
-    model_config = {"from_attributes": True}
-
-class TaskWithExecutorsOutSheme(TaskOutSheme):
-    """
-    Схема задачи с исполнителями.
-    Используется в выводе проектов.
-    """
-    executors: List[TaskExecutorOutSheme] = Field(default_factory=list)
-
-class ProjectOutSchema(BaseModelSheme):
-    """
-    Схема проекта для выхода.
-    """
-    name: str
-    description: Optional[str] = Field(default=None)
-    team_ids: Optional[List[UUID]] = Field(default=None)
-    
-    model_config = {"from_attributes": True}
-
-class ProjectWithTasksOutSheme(ProjectOutSchema):
-    """
-    Схема проекта с вложенным списком задач.
-    """
-    tasks: List[TaskWithExecutorsOutSheme] = Field(default_factory=list)
-
-class TeamWithProjectsOutSheme(BaseModelSheme):
-    """
-    Схема команды с вложенным списком проектов.
-    """
-    name: str
-    member_count: int = Field(default=0, description="Количество участников")
-    projects: List[ProjectWithTasksOutSheme] = Field(default_factory=list)
-    
-    model_config = {"from_attributes": True}
-
-    
 # 🔁 Ручное исправление циклической зависимости для вложенных схем
 # (Pydantic v2 не поддерживает forward-ссылки в моделях-наследниках)
 TeamWithUsersSheme.model_rebuild()
 TeamWithProjectsSheme.model_rebuild()
 TaskWithExecutorsSheme.model_rebuild()
-

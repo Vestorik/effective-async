@@ -52,6 +52,8 @@ class AuthConfig(BaseSettings):
     AUTH_REFRESH_TOKEN_EXPIRY_DAYS: int = Field(default=7, env="AUTH_REFRESH_TOKEN_EXPIRY_DAYS")
     AUTH_ALGORITHM: str = "HS256"
 
+MAIN_AUTH_CONFIG = AuthConfig()
+
 class AuthService:
     """
     Сервис аутентификации и авторизации.
@@ -67,9 +69,11 @@ class AuthService:
         get_current_user: Извлекает пользователя из токена (для FastAPI Depends).
     """
 
-    def __init__(self, secret_key: str, token_expiry_minutes: int = 60):
-        self.secret_key = secret_key
-        self.token_expiry_minutes = token_expiry_minutes
+    def __init__(self):
+        self.secret_key = MAIN_AUTH_CONFIG.AUTH_SECRET_KEY
+        self.token_expiry_minutes = MAIN_AUTH_CONFIG.AUTH_TOKEN_EXPIRY_MINUTES
+        self.refresh_token_expray_days= MAIN_AUTH_CONFIG.AUTH_REFRESH_TOKEN_EXPIRY_DAYS
+        self.auth_algorithm=MAIN_AUTH_CONFIG.AUTH_ALGORITHM
 
     async def register(
         self,
@@ -308,7 +312,7 @@ async def get_current_user_dep(
         Исключения:
             HTTPException: 401, если токен недействителен.
         """
-        auth_service = AuthService(secret_key="...")
+        auth_service = AuthService()
         try:
             return await auth_service.get_current_user(user_repo, token)
         except Exception:

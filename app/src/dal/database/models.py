@@ -85,7 +85,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from enum import Enum
 from logging import getLogger
-from typing import Optional, Self
+from typing import Optional
 from uuid import UUID, uuid4
 
 from passlib.context import CryptContext
@@ -143,6 +143,55 @@ class BaseModel(DeclarativeBase):
     )
 
 
+team_project_table = Table(
+    "team_projects",
+    BaseModel.metadata,
+    Column("team_id", SQL_UUID(as_uuid=True), ForeignKey("teams.id"), primary_key=True),
+    Column(
+        "project_id",
+        SQL_UUID(as_uuid=True),
+        ForeignKey("projects.id"),
+        primary_key=True,
+    ),
+)
+
+
+meeting_teams_table = Table(
+    "meeting_teams",
+    BaseModel.metadata,
+    Column(
+        "meeting_id",
+        SQL_UUID(as_uuid=True),
+        ForeignKey("meetings.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "team_id",
+        SQL_UUID(as_uuid=True),
+        ForeignKey("teams.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+)
+
+
+meeting_participants_table = Table(
+    "meeting_participants",
+    BaseModel.metadata,
+    Column(
+        "meeting_id",
+        SQL_UUID(as_uuid=True),
+        ForeignKey("meetings.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "user_id",
+        SQL_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+)
+
+
 class TimeEventMixin:
     __abstract__ = True
 
@@ -156,6 +205,7 @@ class TimeEventMixin:
 
 class RoleModel(Enum):
     ADMIN = "admin"
+    MANAGER = "manager"
     USER = "user"
 
 
@@ -209,8 +259,12 @@ class UserModel(BaseModel):
         nullable=False,
         comment="Хэшированный пароль пользователя, созданный с помощью bcrypt.",
     )
-    
-    refresh_token_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, comment="Хэш refresh_token для обеспечения безопасного logout и ротации сессий.",)
+
+    refresh_token_hash: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Хэш refresh_token для обеспечения безопасного logout и ротации сессий.",
+    )
 
     def check_password(self, plain_password: str) -> bool:
         """
@@ -250,18 +304,17 @@ class UserModel(BaseModel):
         cascade="all, delete-orphan",
     )
 
+    comments: Mapped[list["CommentModel"]] = relationship(
+        "CommentModel",
+        back_populates="author",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
 
-team_project_table = Table(
-    "team_projects",
-    BaseModel.metadata,
-    Column("team_id", SQL_UUID(as_uuid=True), ForeignKey("teams.id"), primary_key=True),
-    Column(
-        "project_id",
-        SQL_UUID(as_uuid=True),
-        ForeignKey("projects.id"),
-        primary_key=True,
-    ),
-)
+    meetings: Mapped[list["MeetingModel"]] = relationship(
+        secondary=meeting_teams_table,
+        back_populates="participants",
+    )
 
 
 class TeamModel(BaseModel):
@@ -280,6 +333,11 @@ class TeamModel(BaseModel):
         secondary=team_project_table,
         back_populates="project_teams",
         lazy="joined",
+    )
+
+    meetings: Mapped[list["MeetingModel"]] = relationship(
+        secondary=meeting_teams_table,
+        back_populates="teams",
     )
 
 
@@ -314,6 +372,10 @@ class TaskModel(BaseModel):
 
     name: Mapped[str] = mapped_column(String(124), nullable=False)
     description: Mapped[str] = mapped_column(String(512), nullable=True)
+
+    estimate: Mapped[int] = mapped_column(
+        Integer, nullable=True, comment="Оценка задачи"
+    )
 
     id: Mapped[SQL_UUID] = mapped_column(
         SQL_UUID(as_uuid=True),
@@ -358,6 +420,13 @@ class TaskModel(BaseModel):
         back_populates="project_tasks",
     )
 
+    comments: Mapped[list["CommentModel"]] = relationship(
+        "CommentModel",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
 
 class TaskExecutorModel(BaseModel):
     __tablename__ = "task_executors"
@@ -366,7 +435,7 @@ class TaskExecutorModel(BaseModel):
     id: Mapped[None] = mapped_column(
         SQL_UUID(as_uuid=True),
         primary_key=False,
-        nullable=True,      
+        nullable=True,
         comment="Не используется (для совместимости с BaseModel).",
     )
 
@@ -398,8 +467,52 @@ class TaskExecutorModel(BaseModel):
     )
 
 
+class CommentModel(BaseModel):
+    __tablename__ = "comments"
+
+    description: Mapped[str] = mapped_column(String(512), nullable=False)
+
+    author_id: Mapped[Optional[UUID]] = mapped_column(
+        SQL_UUID(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=False,
+        comment="Внешний ключ на автора.",
+        index=True,
+    )
+
+    task_id: Mapped[Optional[UUID]] = mapped_column(
+        SQL_UUID(as_uuid=True),
+        ForeignKey("tasks.id"),
+        nullable=True,
+        comment="Внешний ключ на задачу.",
+        index=True,
+    )
+
+    author: Mapped[Optional["UserModel"]] = relationship(
+        "UserModel", back_populates="comments"
+    )
+
+    task: Mapped[Optional["TaskModel"]] = relationship(
+        "TaskModel", back_populates="comments"
+    )
+
+
 class MeetingModel(BaseModel, TimeEventMixin):
     __tablename__ = "meetings"
+
+    teams: Mapped[list["TeamModel"]] = relationship(
+        secondary="meeting_teams",
+        back_populates="meetings",
+        lazy="selectin",
+        comment="Команды, участвующие во встрече.",
+    )
+
+    participants: Mapped[list["UserModel"]] = relationship(
+        secondary="meeting_participants",
+        back_populates="meetings",
+        lazy="selectin",
+        comment="Индивидуальные участники встречи.",
+    )
 
 
 class EventModel(BaseModel, TimeEventMixin):

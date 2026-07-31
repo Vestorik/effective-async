@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Регистрация пользователя</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f6f8;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+        h2 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 1.5rem;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #555;
+            font-weight: 500;
+        }
+        input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+            box-sizing: border-box; /* Важно для padding */
+        }
+        input:focus {
+            border-color: #007bff;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+        }
+        .error-messages {
+            color: #dc3545;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+        button {
+            width: 100%;
+            padding: 0.75rem;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .footer-text {
+            text-align: center;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+        .footer-text a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        .footer-text a:hover {
+            text-decoration: underline;
+        }
+</style>
+</head>
+<body>
+    <div class="container">
+        <h2>Вход в систему</h2>
+        
+        <form method="POST" action="/auth/login" id="loginForm">
+            
+            <!-- Email -->
+            <div class="form-group">
+                <label for="email">Электронная почта</label>
+                <input 
+                    type="email" 
+                    id="email" 
+                    name="email" 
+                    required 
+                    placeholder="example@example.com"
+                    autocomplete="email"
+                    autofocus
+                >
+                {% if errors.email %}
+                <div class="error-messages">{{ errors.email }}</div>
+                {% endif %}
+            </div>
+
+            <!-- Пароль -->
+            <div class="form-group">
+                <label for="password">Пароль</label>
+                <input 
+                    type="password" 
+                    id="password" 
+                    name="password" 
+                    required 
+                    minlength="8" 
+                    placeholder="Введите пароль"
+                    autocomplete="current-password"
+                >
+                {% if errors.password %}
+                <div class="error-messages">{{ errors.password }}</div>
+                {% endif %}
+            </div>
+
+            <!-- Скрытое поле CSRF токена -->
+            {% if csrf_token %}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            {% endif %}
+
+            <button type="submit">Войти</button>
+        </form>
+
+        <div class="footer-text">
+            Нет аккаунта? <a href="/auth/register">Зарегистрироваться</a>
+        </div>
+    </div>
+
+    <script>
+        // Базовая клиентская обработка ошибок, если нужно дополнить логику на JS
+        document.getElementById('loginForm').addEventListener('submit', function(event) {
+            // Здесь можно добавить предварительную валидацию, если серверная не достаточна
+            // Например, проверку длины пароля или формата email перед отправкой
+            
+            // Пример: предотвращение отправки пустых паролей (хотя HTML required это делает)
+            const password = document.getElementById('password').value;
+            if (password.length < 8) {
+                event.preventDefault();
+                alert('Пароль должен содержать минимум 8 символов');
+            }
+        });
+    </script>
+</body>
+</html>
