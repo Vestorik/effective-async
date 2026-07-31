@@ -499,6 +499,16 @@ class CommentModel(BaseModel):
 
 class MeetingModel(BaseModel, TimeEventMixin):
     __tablename__ = "meetings"
+    
+    name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        comment="Название встречи.",
+    )
+    description: Mapped[Optional[str]] = mapped_column(
+        String(512), nullable=True, comment="Описание встречи."
+    )
+
 
     teams: Mapped[list["TeamModel"]] = relationship(
         secondary="meeting_teams",
@@ -518,6 +528,14 @@ class MeetingModel(BaseModel, TimeEventMixin):
 class EventModel(BaseModel, TimeEventMixin):
     __tablename__ = "events"
 
+    name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        comment="Название события.",
+    )
+    description: Mapped[Optional[str]] = mapped_column(
+        String(512), nullable=True, comment="Описание события."
+    )
 
 def check_time_range_ddl(table_name: str) -> DDL:
     """

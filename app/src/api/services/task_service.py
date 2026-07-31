@@ -156,8 +156,7 @@ class TaskService(BaseService):
             task.name = name
         if description is not None:
             task.description = description
-        if priority is not None:
-            task.priority = priority
+
 
         await task_repo.update(task)
         return task

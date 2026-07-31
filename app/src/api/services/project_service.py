@@ -186,12 +186,12 @@ class ProjectService(BaseService):
 
         # Обновление команд
         if team_ids is not None:
-            project.team_projects.clear()
+            project.project_teams.clear()
             for team_id in team_ids:
                 team = await project_repo.session.get(TeamModel, team_id)
                 if not team:
                     raise Exception(f"Команда с ID {team_id} не найдена")
-                project.team_projects.append(team)
+                project.project_teams.append(team)
 
         project.updated_at = datetime.now(timezone.utc)
         await project_repo.update(project)

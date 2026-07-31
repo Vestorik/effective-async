@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <h1>Обзор проектов и команд</h1>
+    
+    <div class="dashboard-grid">
+        <!-- Левая колонка: Команды -->
+        <div class="column teams-column">
+            <h2>Команды</h2>
+            {% if teams %}
+                {% for team in teams %}
+                <div class="card team-card">
+                    <div class="card-header">
+                        <h3>{{ team.name }}</h3>
+                        <span class="badge member-count">{{ team.member_count }} участников</span>
+                    </div>
+                    <div class="card-body">
+                        <a href="/teams/{{ team.id }}" class="link">Просмотр команды</a>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p>Вы не состоите ни в одной команде или они еще не созданы.</p>
+            {% endif %}
+        </div>
+
+        <!-- Правая колонка: Проекты -->
+        <div class="column projects-column">
+            <h2>Проекты</h2>
+            {% if teams %}
+                {% for team in teams %}
+                    {% if team.projects %}
+                        {% for project in team.projects %}
+                        <div class="card project-card">
+                            <div class="card-header">
+                                <h3>{{ project.name }}</h3>
+                                <a href="/projects/{{ project.id }}" class="link">Подробнее</a>
+                            </div>
+                            <div class="card-body">
+                                <p>{{ project.description or 'Нет описания' }}</p>
+                                <ul class="task-list">
+                                    {% for task in project.tasks %}
+                                    <li class="task-item">
+                                        <span class="task-name">{{ task.name }}</span>
+                                        <span class="task-executors">
+                                            {% for executor in task.executors %}
+                                                <span class="executor-tag">{{ executor.username or 'Unknown' }}</span>
+                                            {% endfor %}
+                                        </span>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
