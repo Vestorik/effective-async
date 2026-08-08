@@ -85,10 +85,14 @@
 <body>
     <div class="container">
         <h2>Вход в систему</h2>
+
+        {% if errors and errors.general %}
+        <div class="error-messages general">{{ errors.general }}</div>
+        {% endif %}
         
-        <form method="POST" action="/auth/login" id="loginForm">
+        <form method="POST" action="/views/auth/login" id="loginForm">
             
-            <!-- Email -->
+
             <div class="form-group">
                 <label for="email">Электронная почта</label>
                 <input 
@@ -100,9 +104,7 @@
                     autocomplete="email"
                     autofocus
                 >
-                {% if errors.email %}
-                <div class="error-messages">{{ errors.email }}</div>
-                {% endif %}
+        
             </div>
 
             <!-- Пароль -->
@@ -117,31 +119,20 @@
                     placeholder="Введите пароль"
                     autocomplete="current-password"
                 >
-                {% if errors.password %}
-                <div class="error-messages">{{ errors.password }}</div>
-                {% endif %}
+            
             </div>
-
-            <!-- Скрытое поле CSRF токена -->
-            {% if csrf_token %}
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            {% endif %}
 
             <button type="submit">Войти</button>
         </form>
 
         <div class="footer-text">
-            Нет аккаунта? <a href="/auth/register">Зарегистрироваться</a>
+            Нет аккаунта? <a href="/views/auth/register">Зарегистрироваться</a>
         </div>
     </div>
 
     <script>
-        // Базовая клиентская обработка ошибок, если нужно дополнить логику на JS
+        // Клиентская валидация (опционально, так как серверная и HTML required уже работают)
         document.getElementById('loginForm').addEventListener('submit', function(event) {
-            // Здесь можно добавить предварительную валидацию, если серверная не достаточна
-            // Например, проверку длины пароля или формата email перед отправкой
-            
-            // Пример: предотвращение отправки пустых паролей (хотя HTML required это делает)
             const password = document.getElementById('password').value;
             if (password.length < 8) {
                 event.preventDefault();

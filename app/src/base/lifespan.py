@@ -1,6 +1,7 @@
 from fastapi import FastAPI, APIRouter
 from contextlib import asynccontextmanager
 from app.src.api.main import api_routers
+from app.src.api.admin import admin_view_set
 from fastapi_swagger_ui_theme import setup_swagger_ui_theme
 from app.src.dal.main import get_data_manager
 
@@ -9,6 +10,13 @@ __all_routers: list[APIRouter] = api_routers
 
 
 async def startapp(app: FastAPI):
+    # Инициализация SQLAdmin админ-панели
+    admin_view_set.setup(
+        app=app,
+        secret_key="change-this-to-a-secure-key-in-production",
+    )
+    app.include_router(admin_view_set.admin.urls)
+
     if __all_routers:
         [app.include_router(router) for router in __all_routers]
 
@@ -32,5 +40,4 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await shutdown(app)
-
 

@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}{{ task.name }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <h1>{{ task.name }}</h1>
+        <a href="/views/tasks/?team_id={{ task.team_id }}" class="btn btn-secondary">Назад к списку</a>
+    </div>
+
+    <div class="card task-details">
+        <div class="card-body">
+            <div class="task-meta">
+                <span class="badge badge-{{ task.priority }}">{{ task.priority|capitalize }}</span>
+                <p><strong>ID:</strong> {{ task.id }}</p>
+                <p><strong>Описание:</strong> {{ task.description or 'Нет описания' }}</p>
+                <p><strong>Создана:</strong> {{ task.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                {% if task.updated_at and task.updated_at != task.created_at %}
+                <p><strong>Обновлена:</strong> {{ task.updated_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Секция исполнителей -->
+    <div class="card executors-section">
+        <div class="card-header">
+            <h2>Исполнители</h2>
+        </div>
+        <div class="card-body">
+            {% if task.executors %}
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Пользователь</th>
+                            <th>Оценка</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for executor in task.executors %}
+                        <tr>
+                            <td>{{ executor.username or executor.email }}</td>
+                            <td>
+                                <!-- Форма для обновления оценки -->
+                                <form action="/views/tasks/update_executor_estimate" method="POST" class="inline-form">
+                                    <input type="hidden" name="task_id" value="{{ task.id }}">
+                                    <input type="hidden" name="user_id" value="{{ executor.id }}">
+                                    <input type="number" name="estimate" value="{{ executor.estimate or '' }}" min="1" max="5" style="width: 50px;">
+                                    <button type="submit" class="btn btn-sm btn-primary">Обновить</button>
+                                </form>
+                            </td>
+                            <td>
+                                <!-- Форма для удаления исполнителя -->
+                                <form action="/views/tasks/delete_executor" method="POST" onsubmit="return confirm('Удалить исполнителя?');">
+                                    <input type="hidden" name="task_id" value="{{ task.id }}">
+                                    <input type="hidden" name="user_id" value="{{ executor.id }}">
+                                    <button type="submit" class="btn btn-sm btn-danger">Удалить</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p class="text-muted">Исполнителей пока нет.</p>
+            {% endif %}
+
+            <!-- Форма добавления исполнителя -->
+            <div class="add-executor-form">
+                <h3>Добавить исполнителя</h3>
+                <form action="/views/tasks/add_executor" method="POST">
+                    <input type="hidden" name="task_id" value="{{ task.id }}">
+                    
+                    <div class="form-group">
+                        <label for="user_id">Пользователь:</label>
+                        <select name="user_id" id="user_id" class="form-control" required>
+                            <!-- В реальном приложении здесь должен быть список пользователей команды -->
+                            <!-- Для MVP заглушка или выбор из общего списка, если есть доступ -->
+                            {% if users_in_team %}
+                                {% for user in users_in_team %}
+                                    <option value="{{ user.id }}">{{ user.username }}</option>
+                                {% endfor %}
+                            {% else %}
+                                <option disabled>Нет пользователей в команде (требует доработки)</option>
+                            {% endif %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="estimate">Оценка (1-5):</label>
+                        <input type="number" name="estimate" min="1" max="5" value="1" class="form-control">
+                    </div>
+
+                    <button type="submit" class="btn btn-success">Добавить</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

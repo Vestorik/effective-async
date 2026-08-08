@@ -12,6 +12,7 @@
 - Репозитории создаются в handlers.py через uow.users, uow.teams и т.д.
 - Убраны явные commit/rollback — они управляются в UnitOfWork.__aexit__().
 """
+from pydantic.v1.validators import int_validator
 
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -21,44 +22,22 @@ from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, status
+from fastapi import Depends, status, Request
 from fastapi.exceptions import HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from jwt import PyJWTError, decode, encode
 from passlib.context import CryptContext
 from passlib.handlers.argon2 import argon2
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.src.api.api_utils import DependsDataManager
 from app.src.api.exceptions import InvalidCredentials, UserNotFound
 from app.src.api.shems import UserCreateSheme, UserOutSheme
+from app.src.base.config import MAIN_AUTH_CONFIG
 from app.src.dal.database.models import UserModel
 from app.src.dal.database.repositories import UserRepository
 
 logger = getLogger(__name__)
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
-
-
-class AuthConfig(BaseSettings):
-    """Настройки JWT и безопасности."""
-
-    model_config = SettingsConfigDict(
-        env_file=Path(__file__).resolve().parents[3] / "deploy" / ".env",
-        env_file_encoding="utf-8",
-        extra="allow",
-        env_prefix="AUTH_",
-    )
-
-    AUTH_SECRET_KEY: str = Field(..., env="AUTH_SECRET_KEY")
-    AUTH_TOKEN_EXPIRY_MINUTES: int = Field(default=60, env="AUTH_TOKEN_EXPIRY_MINUTES")
-    AUTH_REFRESH_TOKEN_EXPIRY_DAYS: int = Field(
-        default=7, env="AUTH_REFRESH_TOKEN_EXPIRY_DAYS"
-    )
-    AUTH_ALGORITHM: str = "HS256"
-
-
-MAIN_AUTH_CONFIG = AuthConfig()
 
 
 class AuthService:
@@ -77,10 +56,10 @@ class AuthService:
     """
 
     def __init__(self):
-        self.secret_key = MAIN_AUTH_CONFIG.AUTH_SECRET_KEY
-        self.token_expiry_minutes = MAIN_AUTH_CONFIG.AUTH_TOKEN_EXPIRY_MINUTES
-        self.refresh_token_expray_days = MAIN_AUTH_CONFIG.AUTH_REFRESH_TOKEN_EXPIRY_DAYS
-        self.auth_algorithm = MAIN_AUTH_CONFIG.AUTH_ALGORITHM
+        self.secret_key = MAIN_AUTH_CONFIG.secret_key
+        self.token_expiry_minutes = MAIN_AUTH_CONFIG.token_expiry_minutes
+        self.refresh_token_expray_days = MAIN_AUTH_CONFIG.refresh_token_expiry_days
+        self.auth_algorithm = MAIN_AUTH_CONFIG.algorithm
 
     async def register(
         self,
@@ -119,7 +98,7 @@ class AuthService:
         user_repo: UserRepository,
         email: str,
         password: str,
-    ) -> dict[str, str]:
+    ) -> dict[str, str | int]:
         """
         Аутентифицирует пользователя и выдаёт JWT-токен.
 
@@ -139,17 +118,15 @@ class AuthService:
         if not user or not pwd_context.verify(password, user.hashed_password):
             raise InvalidCredentials()
 
-        expires_at = datetime.now(UTC) + timedelta(
-            minutes=self.token_expiry_minutes
-        )
-        payload = {
+        expires_at = datetime.now(UTC) + timedelta(minutes=self.token_expiry_minutes)
+        payload: dict[str, str | datetime] = {
             "sub": str(user.id),
             "email": user.email,
             "role": user.role,
             "exp": expires_at,
         }
         token = encode(payload, self.secret_key, algorithm="HS256")
-        return {"access_token": token, "token_type": "bearer"}
+        return {"access_token": token, "token_type": "bearer", "durationin_sec": self.token_expiry_minutes * 60 }
 
     async def verify_token(self, token: str) -> dict[str, str]:
         """
@@ -260,8 +237,7 @@ class AuthService:
                 "sub": str(user.id),
                 "email": user.email,
                 "role": user.role,
-                "exp": datetime.now(UTC)
-                + timedelta(minutes=self.token_expiry_minutes),
+                "exp": datetime.now(UTC) + timedelta(minutes=self.token_expiry_minutes),
             }
             new_refresh_payload = {
                 "sub": str(user.id),
@@ -309,11 +285,9 @@ class AuthService:
         await user_repo.update(user)
 
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
-
 
 async def get_current_user_dep(
-    token: Annotated[str, Depends(oauth2_scheme)], db_manager: DependsDataManager
+    request: Request, db_manager: DependsDataManager
 ) -> UserModel:
     """
     Получает текущего пользователя из JWT-токена.
@@ -328,17 +302,45 @@ async def get_current_user_dep(
     Исключения:
         HTTPException: 401, если токен недействителен.
     """
+    auth_header = request.headers.get("Authorization")
+    token = None
+    
+    if auth_header:
+        # Проверяем формат "Bearer <token>"
+        parts = auth_header.split(" ", 1)
+        if len(parts) == 2 and parts[0] == "Bearer":
+            token = parts[1]
+    
+
+    if not token:
+        token = request.cookies.get("access_token")
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Не авторизован: токен не найден",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
     try:
         async with db_manager() as uow:
             auth_service = AuthService()
             return await auth_service.get_current_user(uow.users, token)
 
-    except Exception:
+    except InvalidCredentials:
+
+        logger.info("Неверный или просроченный токен") 
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Не удалось аутентифицировать пользователя",
+            detail="Неверный или просроченный токен",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    except Exception:
+        logger.exception("Ошибка сервера при проверке токена")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Ошибка сервера при проверке токена",
+            headers={"WWW-Authenticate": "Bearer"},)
 
 
 class RoleType(Enum):

@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 from logging import getLogger
 from uuid import UUID
 
@@ -46,7 +46,7 @@ class DashboardService(BaseService):
         """
         Получает данные для дашборда.
 
-        Возвращает список команд, в которых состоит пользователь (или все команды, 
+        Возвращает список команд, в которых состоит пользователь (или все команды,
         если логика позволяет). Для каждой команды возвращает связанные проекты.
         Для каждого проекта возвращает задачи с исполнителями.
 
@@ -60,50 +60,38 @@ class DashboardService(BaseService):
         project_repo = ProjectRepository(self.session)
         task_repo = TaskRepository(self.session)
         executor_repo = TaskExecutorRepository(self.session)
-        
-        # Получаем команды, в которых состоит пользователь
-        # (предполагаем, что у UserModel есть team_id или связь через промежуточную таблицу)
-        # Для простоты в примере возьмем все команды, если у пользователя роль manager, 
-        # или те, где он состоит.
-        
-        # Получаем все команды (или фильтруем по user) 
+
         all_teams = await team_repo.get_all()
-        
+
         result_teams = []
-        
+
         for team in all_teams:
             # Получаем проекты для команды
             projects = await self._get_projects_for_team(project_repo, team.id)
-            
-            # Если проектов нет, можно пропустить или вернуть пустой список (по желанию)
-            # Но для дашборда лучше показать, даже если пусто
-            
+
             project_objects = []
             for proj in projects:
                 # Получаем задачи для проекта
                 tasks = await self._get_tasks_for_project(task_repo, proj.id)
-                
+
                 # Получаем исполнителей для каждой задачи
                 enriched_tasks = await self._enrich_tasks_with_executors(
                     executor_repo, task_repo, tasks
                 )
-                
+
                 task_shemes = [
-                    TaskWithExecutorsOutSheme.model_validate(t) 
-                    for t in enriched_tasks
+                    TaskWithExecutorsOutSheme.model_validate(t) for t in enriched_tasks
                 ]
-                
+
                 proj_schema = ProjectWithTasksOutSheme(
-                    name=proj.name,
-                    description=proj.description,
-                    tasks=task_shemes
+                    name=proj.name, description=proj.description, tasks=task_shemes
                 )
                 project_objects.append(proj_schema)
 
             team_schema = TeamWithProjectsOutSheme(
                 name=team.name,
                 member_count=len(await self._get_members_for_team(team_repo, team.id)),
-                projects=project_objects
+                projects=project_objects,
             )
             result_teams.append(team_schema)
 
@@ -154,12 +142,15 @@ class DashboardService(BaseService):
         """
         # Предполагается, что в TeamModel есть связь users
         team = await team_repo.get_by_id(team_id)
-        if team and hasattr(team, 'users'):
+        if team and hasattr(team, "users"):
             return team.users
         return []
 
     async def _enrich_tasks_with_executors(
-        self, executor_repo: TaskExecutorRepository, task_repo: TaskRepository, tasks: Sequence
+        self,
+        executor_repo: TaskExecutorRepository,
+        task_repo: TaskRepository,
+        tasks: Sequence,
     ) -> list:
         """
         Обогащает задачи данными об исполнителях.

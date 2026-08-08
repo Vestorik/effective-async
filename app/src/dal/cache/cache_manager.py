@@ -71,63 +71,19 @@
         # Write-операция — обходит кэш
         await uow.users.update(user)
 """
-from pathlib import Path
-
 
 import functools
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Any, Optional
 from datetime import timedelta
-from redis.asyncio import Redis
-from app.src.dal.database.session_manage import DataBaseManager
-from typing import TypeVar, Generic
 from logging import getLogger
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
+from redis.asyncio import Redis
+
+from app.src.base.config import RedisConfig
+from app.src.dal.database.session_manage import DataBaseManager
 
 RepositoryLike = TypeVar("RepositoryLike")
 logger = getLogger()
-
-
-class RedisConfig(BaseSettings):
-    """
-    Конфигурация подключения к Redis.
-
-    Собирает параметры из переменных окружения с префиксом `REDIS_`.
-
-    Атрибуты:
-        host (str): Хост Redis (обязательный, alias=HOST).
-        port (int): Порт Redis (по умолчанию 6379, alias=PORT).
-        db (int): Номер базы данных (по умолчанию 0, alias=DB).
-        password (Optional[str]): Пароль для аутентификации (alias=PASSWORD).
-        ssl (bool): Использовать SSL (по умолчанию False, alias=SSL).
-    """
-
-    model_config = SettingsConfigDict(
-        env_file=Path(__file__).resolve().parents[4] / "deploy" / ".env",
-        env_file_encoding="utf-8",
-        extra="allow",
-        env_prefix="REDIS_",
-    )
-
-    host: str = Field(..., min_length=1)
-    port: int = Field(default=6379, ge=1, le=65535)
-    db: int = Field(default=0, ge=0)
-    password: Optional[str] = Field(default=None, alias="PASSWORD")
-    ssl: bool = Field(default=False, alias="SSL")
-
-    @property
-    def connection_url(self) -> str:
-        """Возвращает строку подключения к Redis.
-
-        Пример: redis://:password@host:port/db
-
-        Если `password=None`, пароль не включается.
-        """
-        password_part = f":{self.password}@" if self.password else ""
-        protocol = "rediss" if self.ssl else "redis"
-        return f"{protocol}://{password_part}{self.host}:{self.port}/{self.db}"
 
 
 class CacheManager:
@@ -158,7 +114,7 @@ class CacheManager:
         self.redis = redis
         self.default_ttl = default_ttl
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         try:
             value = await self.redis.get(key)
             if value is None:
@@ -203,7 +159,7 @@ class CacheManager:
 
 
 def create_cache_manager_from_config(
-    config: Optional[RedisConfig] = None, ttl: timedelta = timedelta(minutes=5)
+    config: RedisConfig | None = None, ttl: timedelta = timedelta(minutes=5)
 ) -> CacheManager:
     """
     Создаёт CacheManager на основе RedisConfig.
@@ -232,7 +188,7 @@ class CachedRepositoryProxy(Generic[RepositoryLike]):
 
     Поведение:
         - Перехватывает вызовы методов репозитория через __getattr__.
-        - Пытается кэшировать результаты всех вызванных методов 
+        - Пытается кэшировать результаты всех вызванных методов
         - Кэширует результаты вызовов методов в Redis с использованием CacheManager.
         - Ключи кэша формируются динамически на основе имени метода и аргументов.
         - Возвращает кэшированное значение при повторном вызове с теми же аргументами.
@@ -289,6 +245,7 @@ class CachedRepositoryProxy(Generic[RepositoryLike]):
         await cached_repo.create(user_data)  # передаётся напрямую, не кэшируется
         await cached_repo.update(user_data)  # передаётся напрямую, не кэшируется
     """
+
     def __init__(
         self,
         repository_obj: RepositoryLike,
@@ -400,16 +357,16 @@ class CachedUnitOfWork:
         self.__cache_manager: CacheManager = cache_manager
         self.__time_segment: timedelta = time_segment
 
-    async def __aenter__(self) -> "CachedUnitOfWork":
+    async def __aenter__(self) -> CachedUnitOfWork:
         if TYPE_CHECKING:
             from app.src.dal.database.repositories import (
-                UserRepository,
-                TeamRepository,
-                ProjectRepository,
-                TaskRepository,
-                TaskExecutorRepository,
-                MeetingRepository,
                 EventRepository,
+                MeetingRepository,
+                ProjectRepository,
+                TaskExecutorRepository,
+                TaskRepository,
+                TeamRepository,
+                UserRepository,
             )
 
             self.users: UserRepository

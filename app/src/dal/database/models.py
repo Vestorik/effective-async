@@ -290,7 +290,7 @@ class UserModel(BaseModel):
     )
     team: Mapped[Optional["TeamModel"]] = relationship(
         back_populates="users",
-        lazy="joined",
+        lazy="select",
         uselist=False,  # <-- 1:1 для пользователя
     )
     task_executors: Mapped[list["TaskExecutorModel"]] = relationship(
@@ -306,7 +306,7 @@ class UserModel(BaseModel):
     )
 
     meetings: Mapped[list["MeetingModel"]] = relationship(
-        secondary=meeting_teams_table,
+        secondary=meeting_participants_table,
         back_populates="participants",
     )
 
@@ -319,7 +319,7 @@ class TeamModel(BaseModel):
     # 1:n один пользователь одна комманда, в комманде много пользователей
     users: Mapped[list["UserModel"]] = relationship(
         back_populates="team",
-        lazy="joined",
+        lazy="select",
     )
 
     # n:m у команды много проектов, в 1 проекте может быть несколько команд
@@ -508,14 +508,12 @@ class MeetingModel(BaseModel, TimeEventMixin):
         secondary="meeting_teams",
         back_populates="meetings",
         lazy="selectin",
-        comment="Команды, участвующие во встрече.",
     )
 
     participants: Mapped[list["UserModel"]] = relationship(
         secondary="meeting_participants",
         back_populates="meetings",
         lazy="selectin",
-        comment="Индивидуальные участники встречи.",
     )
 
 

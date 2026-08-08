@@ -246,7 +246,7 @@ class UserRepository(BaseRepository[UserModel]):
         result = await self.session.execute(
             select(self.model).where(self.model.email == email)
         )
-        return result.scalar_one_or_none()
+        return result.scalars().unique().first()
     
     async def get_by_role(self, role: str) -> Sequence[UserModel]:
         """

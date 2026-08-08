@@ -79,7 +79,7 @@ class TeamService(BaseService):
         if user is None:
             raise Exception("Менеджер не найден.")
 
-        user.team_id = team.id
+        user.team_id = team.id  # ty:ignore[invalid-assignment]
         await user_repo.update(user)
 
         return TeamSchema.model_validate(team)
@@ -127,3 +127,61 @@ class TeamService(BaseService):
             return []
         # Для получения команды используем TeamRepository (не реализовано, добавим позже)
         raise NotImplementedError("get_teams_for_user требует реализации через TeamRepository")
+    
+    async def get_all_teams(
+        self,
+        team_repo: TeamRepository
+    ) -> List[TeamSchema]:
+        """
+        Получает список всех команд.
+
+        Аргументы:
+            team_repo: Экземпляр TeamRepository.
+
+        Возвращает:
+            List[TeamSchema]: Список всех команд.
+        """
+        teams = await team_repo.get_all()
+        return [TeamSchema.model_validate(team) for team in teams]
+    
+    async def join_team(
+        self,
+        team_repo: TeamRepository,
+        user_repo: UserRepository,
+        user_id: UUID,
+        team_id: UUID
+    ) -> TeamSchema:
+        """
+        Вступление пользователя в команду.
+
+        Аргументы:
+            team_repo: Экземпляр TeamRepository.
+            user_repo: Экземпляр UserRepository.
+            user_id (UUID): ID пользователя.
+            team_id (UUID): ID команды.
+
+        Возвращает:
+            TeamSchema: Обновленная команда.
+
+        Исключения:
+            TeamNotFound: Если команда не найдена.
+            ValueError: Если пользователь уже в другой команде или команда полная.
+        """
+        team = await team_repo.get_by_id(team_id)
+        if not team:
+            raise TeamNotFound()
+
+        user = await user_repo.get_by_id(user_id)
+        if not user:
+            raise ValueError("Пользователь не найден")
+
+        # Проверка: пользователь уже в команде?
+        if user.team_id:
+            raise ValueError("Пользователь уже состоит в команде")
+
+        # Проверка: лимит участников? (Допустим, пока нет жесткого лимита, но можно добавить)
+        
+        user.team_id = team.id  # ty:ignore[invalid-assignment]
+        await user_repo.update(user)
+
+        return TeamSchema.model_validate(team)

@@ -130,7 +130,6 @@ class TaskService(BaseService):
         task_id: UUID,
         name: Optional[str] = None,
         description: Optional[str] = None,
-        priority: Optional[str] = None,
     ) -> TaskModel:
         """
         Обновляет задачу.

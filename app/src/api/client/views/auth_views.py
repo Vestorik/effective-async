@@ -1,3 +1,4 @@
+from datetime import datetime
 from logging import getLogger
 from typing import Annotated
 
@@ -5,20 +6,19 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, 
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
-from pydantic import ValidationError
+from pydantic import ValidationError, EmailStr, BaseModel
 
 from app.src.api.api_utils import DependsDataManager
 from app.src.api.exceptions import InvalidCredentials, UserAlreadyExists
 from app.src.api.handlers.user_handlers import create_user_handler
 from app.src.api.services.auth import AuthService
 from app.src.api.shems import UserCreateSheme
+from app.src.api.client.views._views_base import templates, prefix
 
-prefix = "/views"
-templates = Jinja2Templates(directory="app/src/api/templates")
-auth_router = APIRouter(prefix=f"{prefix}/auth", tags=["auth"])
+auth_router_views = APIRouter(prefix=f"{prefix}/auth", tags=["auth"])
 logger = getLogger(__name__)
 
-@auth_router.get("/register")
+@auth_router_views.get("/register")
 async def register_get(
     request: Request,
     error: dict | None = None,
@@ -40,7 +40,7 @@ async def register_get(
     )
 
 
-@auth_router.post("/register")
+@auth_router_views.post("/register", response_class=RedirectResponse)
 async def register_post(
     request: Request,
     data_manager: DependsDataManager,
@@ -67,7 +67,12 @@ async def register_post(
     # Валидация входящих данных через Pydantic
     try:
         if password != confirm_password:
-            raise HTTPException(status_code=401, detail="Passwords do not match")
+            return templates.TemplateResponse(
+                name="auth/registration_template.html",
+                request=request,
+                context={"errors": {"password": "Пароли не совпадают"}},
+            )
+
         
         user_data = UserCreateSheme(
             username=username,
@@ -78,11 +83,9 @@ async def register_post(
         )
         await create_user_handler(user_data, data_manager) 
         
-        return templates.TemplateResponse(
-            name="auth/login_template.html",
-            request=request,
-            context={"succes": {"Регистрация успешна, войдите в акаунт"}},
-            status_code=status.HTTP_200_OK,
+        return RedirectResponse(
+            url=f"{prefix}/auth/login",
+            status_code = status.HTTP_303_SEE_OTHER,
         )
         
     except ValidationError:
@@ -110,7 +113,7 @@ async def register_post(
         )
 
 
-@auth_router.get("/login")
+@auth_router_views.get("/login")
 async def login_get(request: Request):
     """
     Отображение формы входа.
@@ -127,19 +130,27 @@ async def login_get(request: Request):
         context={ "errors": {}, "success": ""}
     )
 
+class LoginRequest(BaseModel):
+    """
+    Схема валидации данных для входа.
 
-@auth_router.post("/login")
+    Содержит поля email и password с базовой валидацией.
+    """
+    email: EmailStr
+    password: str
+
+
+@auth_router_views.post("/login")
 async def login_post(
     request: Request,
     data_manager: DependsDataManager,
-    form: Annotated[OAuth2PasswordRequestForm, Depends()]
+    login_data: Annotated[LoginRequest, Form()],
 ):
     """
     Обработка входа пользователя.
 
     Аргументы:
         request (Request): Объект запроса.
-        form (OAuth2PasswordRequestForm): Стандартная форма OAuth2 (username=email, password).
         data_manager (DataManager): Внедрённый менеджер данных.
 
     Возвращает:
@@ -150,32 +161,29 @@ async def login_post(
         auth_service = AuthService()
 
         try:
-            user = await uow.users.get_by_email(form.username)
-            
-            if not user or not user.check_password(form.password):
-                 raise InvalidCredentials()
-
             # Генерация токенов
-            tokens = await auth_service.authenticate(
+            tokens: dict[str, str | int] = await auth_service.authenticate(
                 user_repo=uow.users,
-                email=form.username,
-                password=form.password
+                email=login_data.email,
+                password=login_data.password
             )
             
-            response = Response(
-                content="OK",
-                status_code=status.HTTP_200_OK
+            redirect_response = RedirectResponse(
+                url=f"{prefix}/dashboard", 
+                status_code=status.HTTP_303_SEE_OTHER
             )
-            response.set_cookie(
+            
+            # Устанавливаем куки напрямую на ответ редиректа
+            redirect_response.set_cookie(
                 key="access_token",
-                value=tokens["access_token"],
+                value=tokens["access_token"],  # ty:ignore[invalid-argument-type]
                 httponly=True,
                 secure=True,       
                 samesite="lax",   
-                max_age=1800      
+                max_age=tokens["durationin_sec"]  # ty:ignore[invalid-argument-type]
             )
 
-            return RedirectResponse(url=f"{prefix}/dashboard", status_code=status.HTTP_303_SEE_OTHER)
+            return redirect_response
 
         except InvalidCredentials:
              return templates.TemplateResponse(
@@ -192,7 +200,7 @@ async def login_post(
             )
             
             
-@auth_router.get("/logout")
+@auth_router_views.get("/logout")
 async def logout(
     request: Request,
 ):

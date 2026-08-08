@@ -67,129 +67,24 @@
     - WARNING: fallback на SQLite, ошибки pre-ping, weak passwords.
     - CRITICAL: полная недоступность БД — завершение работы.
 """
-from dotenv import find_dotenv, load_dotenv
 
-from urllib.parse import quote_plus
-from pydantic import Field, computed_field, field_validator, model_validator
-from pathlib import Path
-from typing import Tuple
 import logging
+from pathlib import Path
 from sys import exit as sysexit
-from sqlalchemy.pool import StaticPool
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
     AsyncSession,
     async_sessionmaker,
-    AsyncEngine,
     create_async_engine,
 )
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.pool import StaticPool
+
+from app.src.base.config import PostgresDatabaseConfig
 
 # состояние поддержки SQLite 
 SQLITE_SUPPORTED = False
-path = Path(__file__).resolve().parents[4] / "deploy" / ".env"
-load_dotenv(dotenv_path=path, override=True)
-
-class PostgresDatabaseConfig(BaseSettings):
-    """
-    Конфигурация подключения к PostgreSQL-базе данных.
-
-    Собирает строку подключения из компонентов, валидирует параметры и
-    предоставляет метод `build_connection_url()` для получения готовой URL.
-
-    Использует переменные окружения с префиксом `POSTGRES_` (например, POSTGRES_HOST).
-
-    Атрибуты:
-        host: str — Хост сервера PostgreSQL (не пустой, валидный домен/IP)
-        port: int — Порт (1–65535)
-        user: str — Имя пользователя (не пустой)
-        password: str | None — Пароль (может быть пустым в dev-средах)
-        db_name: str — Имя базы данных (не пустой)
-        pool_size: int — Размер пула соединений (по умолчанию 10)
-        pool_timeout: int — Таймаут получения соединения из пула (по умолчанию 30)
-        max_overflow: int — Максимальное количество дополнительных соединений при перегрузке (по умолчанию 20)
-        pool_pre_ping: bool — Проверка соединения перед использованием (по умолчанию True)
-        pool_recycle: int — Время жизни соединения до пересоздания (по умолчанию 3600 сек)
-        echo: bool — Логировать SQL-запросы (по умолчанию False)
-
-    Возвращаемое значение метода `connection_url`:
-        str — Готовая строка подключения, например:
-        postgresql+asyncpg://user:pass@host:5432/db
-
-    Возможные исключения:
-        ValueError: если не пройдёт валидация (например, пустой `host`)
-    """
-
-    model_config = SettingsConfigDict(
-        # env_file=find_dotenv(filename=".env", raise_error_if_not_found=False),
-        env_file_encoding="utf-8",
-        extra="ignore",
-        env_prefix="POSTGRES_",  
-    )
-    
-
-    host: str = Field(..., env_alias="HOST", min_length=1, exclude=True)       
-    port: int = Field(..., env_alias="PORT", ge=1, le=65535,exclude=True)     
-    user: str = Field(..., env_alias="USER", min_length=1, exclude=True)
-    password: str | None = Field(default=None, env_alias="PASSWORD", exclude=True)
-    db_name: str = Field(..., env_alias="DB_NAME", min_length=1, exclude=True)
-
-    # optional
-    echo: bool = Field(default=False, env_alias="ECHO")    
-    max_overflow: int = Field(default=20, env_alias="MAX_OVERFLOW", ge=0) 
-    pool_pre_ping: bool = Field(default=True, env_alias="POOL_PRE_PING") 
-    pool_recycle: int = Field(default=3600, env_alias="POOL_RECYCLE", ge=0) 
-    pool_size: int = Field(default=10, env_alias="POOL_SIZE", ge=1)
-    pool_timeout: int = Field(default=30, env_alias="POOL_TIMEOUT", ge=1)
-
-    @computed_field
-    @property
-    def connection_url(self) -> str:
-        """Собирает строку подключения к PostgreSQL.
-
-        Внимание: если `password` равен `None`, он не включается в URL.
-
-        Возвращает:
-            str — готовая строка подключения, например:
-                postgresql+asyncpg://user:password@host:5432/db
-        """
-        # ✅ Важно: используем quote_plus, чтобы безопасно кодировать спецсимволы в пароле
-        password_part = ""
-        if self.password:
-            password_part = f":{quote_plus(self.password)}"
-
-        return f"postgresql+asyncpg://{self.user}{password_part}@{self.host}:{self.port}/{self.db_name}"
-
-    @field_validator("host")
-    @classmethod
-    def _validate_host(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("Поле `host` не должно быть пустым")
-        return v.strip()
-
-    @field_validator("db_name")
-    @classmethod
-    def _validate_db_name(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("Поле `db_name` не должно быть пустым")
-        return v.strip()
-
-    @field_validator("user")
-    @classmethod
-    def _validate_user(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("Поле `user` не должно быть пустым")
-        return v.strip()
-
-    @model_validator(mode="after")
-    def _validate_after(self) -> PostgresDatabaseConfig:
-        """Дополнительная проверка: пароль не должен быть логином."""
-        if self.password is not None and self.password == self.user:
-            logger.warning(
-                "Пароль совпадает с именем пользователя (POSTGRES_PASSWORD=POSTGRES_USER). "
-                "Это может быть уязвимостью. Рассмотрите изменение пароля."
-            )
-        return self
 
 
 logger = logging.getLogger(__name__)
@@ -270,7 +165,6 @@ def create_postgre_engine(db_config: PostgresDatabaseConfig) -> AsyncEngine:
     """
 
     database_url = db_config.connection_url
-    print(database_url)
     other_config = db_config.model_dump(exclude={"connection_url"})
     
     logger.info("Попытка подключения к базе данных PostgreSQL")
@@ -324,7 +218,7 @@ def create_sqlite_engine() -> AsyncEngine:
     return sqlite_engine
 
 
-async def start_engine(database_config: PostgresDatabaseConfig | None = None) -> Tuple[AsyncEngine, async_sessionmaker[AsyncSession]]:
+async def start_engine(database_config: PostgresDatabaseConfig | None = None) -> tuple[AsyncEngine, async_sessionmaker[AsyncSession]]:
     """Инициализирует и запускает асинхронный движок базы данных с поддержкой fallback-режима.
 
     Функция пытается подключиться к основной базе данных (PostgreSQL) по URL из переменной
