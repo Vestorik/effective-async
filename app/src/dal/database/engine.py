@@ -83,10 +83,6 @@ from sqlalchemy.pool import StaticPool
 
 from app.src.base.config import PostgresDatabaseConfig
 
-# состояние поддержки SQLite 
-SQLITE_SUPPORTED = False
-
-
 logger = logging.getLogger(__name__)
 
 
@@ -166,7 +162,7 @@ def create_postgre_engine(db_config: PostgresDatabaseConfig) -> AsyncEngine:
 
     database_url = db_config.connection_url
     other_config = db_config.model_dump(exclude={"connection_url"})
-    
+
     logger.info("Попытка подключения к базе данных PostgreSQL")
     postgre_engine: AsyncEngine = create_async_engine(database_url, **other_config)
     return postgre_engine
@@ -218,7 +214,9 @@ def create_sqlite_engine() -> AsyncEngine:
     return sqlite_engine
 
 
-async def start_engine(database_config: PostgresDatabaseConfig | None = None) -> tuple[AsyncEngine, async_sessionmaker[AsyncSession]]:
+async def start_engine(
+    database_config: PostgresDatabaseConfig | None = None, SQLITE_SUPPORTED: bool=False
+) -> tuple[AsyncEngine, async_sessionmaker[AsyncSession]]:
     """Инициализирует и запускает асинхронный движок базы данных с поддержкой fallback-режима.
 
     Функция пытается подключиться к основной базе данных (PostgreSQL) по URL из переменной
@@ -226,6 +224,10 @@ async def start_engine(database_config: PostgresDatabaseConfig | None = None) ->
     автоматически переключается на локальную SQLite-базу в качестве резервного варианта.
 
     В случае полного отказа подключения к любой из баз данных — приложение завершается с кодом 1.
+
+    Аргументы:
+    database_config:  PostgresDatabaseConfig | None - pydantic_settings настройки бд из env
+    SQLITE_SUPPORTED: bool = False - использовать ли sqlite если postgres не доступен
 
     Возвращает:
         tuple[AsyncEngine, async_sessionmaker[AsyncSession]]: Пара, содержащая:
@@ -263,7 +265,7 @@ async def start_engine(database_config: PostgresDatabaseConfig | None = None) ->
         - Файл SQLite создаётся автоматически в корне проекта как `.database.db`.
         - Все модели должны быть импортированы в `database.models.Base`, иначе таблицы не создадутся.
     """
-    
+
     async def test_connection(conn_engine: AsyncEngine) -> bool:
         """Проверяет соединение с базой данных, выполняя тестовый SQL-запрос.
 
@@ -298,11 +300,10 @@ async def start_engine(database_config: PostgresDatabaseConfig | None = None) ->
             logger.critical("Подключение к БД не возможно. Завершение работы")
             sysexit(1)
 
-
-
     db_config: PostgresDatabaseConfig = database_config or PostgresDatabaseConfig()
-    logger.info("Получение DATABASE_URL из переменных окружения",)
-    
+    logger.info(
+        "Получение DATABASE_URL из переменных окружения",
+    )
 
     engine: AsyncEngine = create_postgre_engine(db_config)
     if await test_connection(engine):
@@ -311,17 +312,9 @@ async def start_engine(database_config: PostgresDatabaseConfig | None = None) ->
         logger.warning("PostgreSQL недоступен. Переключение на SQLite.")
         if SQLITE_SUPPORTED:
             engine = await check_sqlite()
-        else: 
+        else:
             raise Exception("PostgreSQL недоступен, поддержка sqlite отключена")
 
     session_maker: async_sessionmaker[AsyncSession] = create_session_maker(engine)
 
     return engine, session_maker
-
-
-
-
-
-        
-
-

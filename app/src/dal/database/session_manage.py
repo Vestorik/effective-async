@@ -57,26 +57,28 @@ async def process_user_event(db_session_maker: async_sessionmaker[AsyncSession],
         raise
 
 """
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+from logging import getLogger
+from typing import Self
 
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from tenacity import (
     AsyncRetrying,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
 )
-from sqlalchemy.exc import OperationalError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, AsyncEngine
-from logging import getLogger
-from typing import AsyncGenerator
-from contextlib import asynccontextmanager
+
 from app.src.dal.database.repositories import (
-    UserRepository,
-    TeamRepository,
-    ProjectRepository,
-    TaskRepository,
-    TaskExecutorRepository,
-    MeetingRepository,
     EventRepository,
+    MeetingRepository,
+    ProjectRepository,
+    TaskExecutorRepository,
+    TaskRepository,
+    TeamRepository,
+    UserRepository,
 )
 
 logger = getLogger(__name__)
@@ -264,7 +266,7 @@ class UnitOfWork:
         self._session_maker = session_maker
 
 
-    async def __aenter__(self) -> "UnitOfWork":
+    async def __aenter__(self) -> Self:
         self.session = self._session_maker()
         self.users = UserRepository(self.session)
         self.teams = TeamRepository(self.session)
@@ -334,3 +336,5 @@ class DataBaseManager:
     @property
     def get_engine(self):
         return self.__data_base_engine 
+    
+    

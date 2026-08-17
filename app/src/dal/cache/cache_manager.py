@@ -268,8 +268,7 @@ class CachedRepositoryProxy(Generic[RepositoryLike]):
         @functools.wraps(attr)
         async def wrapper(*args, **kwargs):
             # Формируем ключ: "tasks:get_by_id:123:..."
-            # Пропускаем `self` из args (он первый)
-            cache_key = self.__make_cache_key(name, args[1:], kwargs)
+            cache_key = self.__make_cache_key(name, args, kwargs)
 
             # 1. Попытка из кэша
             cached_value = await self.__cache.get(cache_key)

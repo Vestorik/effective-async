@@ -147,19 +147,19 @@ class PostgresDatabaseConfig(BaseSettings):
         env_prefix="POSTGRES_",
     )
 
-    host: str = Field(..., env_alias="HOST", min_length=1, exclude=True)
-    port: int = Field(..., env_alias="PORT", ge=1, le=65535, exclude=True)
-    user: str = Field(..., env_alias="USER", min_length=1, exclude=True)
-    password: str | None = Field(default=None, env_alias="PASSWORD", exclude=True)
-    db_name: str = Field(..., env_alias="DB_NAME", min_length=1, exclude=True)
+    host: str = Field(..., min_length=1, exclude=True)
+    port: int = Field(..., ge=1, le=65535, exclude=True)
+    user: str = Field(..., min_length=1, exclude=True)
+    password: str | None = Field(default=None, exclude=True)
+    db_name: str = Field(..., min_length=1, exclude=True)
 
     # optional
-    echo: bool = Field(default=False, env_alias="ECHO")
-    max_overflow: int = Field(default=20, env_alias="MAX_OVERFLOW", ge=0)
-    pool_pre_ping: bool = Field(default=True, env_alias="POOL_PRE_PING")
-    pool_recycle: int = Field(default=3600, env_alias="POOL_RECYCLE", ge=0)
-    pool_size: int = Field(default=10, env_alias="POOL_SIZE", ge=1)
-    pool_timeout: int = Field(default=30, env_alias="POOL_TIMEOUT", ge=1)
+    echo: bool = Field(default=False,)
+    max_overflow: int = Field(default=20, ge=0)
+    pool_pre_ping: bool = Field(default=True)
+    pool_recycle: int = Field(default=3600, ge=0)
+    pool_size: int = Field(default=10, ge=1)
+    pool_timeout: int = Field(default=30, ge=1)
 
     @computed_field
     @property

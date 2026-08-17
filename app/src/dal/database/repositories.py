@@ -333,7 +333,6 @@ class UserRepository(BaseRepository[UserModel]):
             await self.update(user)
 
 
-
 class TeamRepository(BaseRepository):
     """
     Репозиторий для работы с TeamModel.
@@ -502,7 +501,6 @@ class TaskRepository(BaseRepository):
             stmt = stmt.where(self.model.priority == priority)
         result = await self.session.execute(stmt)
         return result.scalars().all()
-
 
 
 class TaskExecutorRepository(BaseRepository):
