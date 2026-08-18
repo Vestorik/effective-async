@@ -19,7 +19,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
-from app.src.api.api_utils import DataManager
+from app.src.api.utils.api_utils import DataManager
 from app.src.api.exceptions import ProjectNotFound
 from app.src.api.services.project_service import ProjectService
 from app.src.api.shems import ProjectCreate, ProjectSchema, ProjectUpdate

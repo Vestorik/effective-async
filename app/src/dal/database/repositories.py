@@ -62,7 +62,7 @@
 """
 
 from abc import ABC, abstractmethod
-from sqlalchemy.orm import DeclarativeBase, selectinload
+from sqlalchemy.orm import DeclarativeBase, selectinload, joinedload
 from typing import Optional, Sequence, Tuple, TypeVar, Generic
 from uuid import UUID
 from sqlalchemy import select, func, delete
@@ -360,6 +360,39 @@ class TeamRepository(BaseRepository):
             Optional[TeamModel]: Команда или None.
         """
         return await self.session.get(self.model, obj_id)
+    
+    async def get_all(self) -> Sequence[TeamModel]:
+        stmt = select(TeamModel).options(
+            joinedload(TeamModel.users),
+            joinedload(TeamModel.team_projects),
+        )
+        result = await self.session.execute(stmt)
+
+        return result.scalars().unique().all()
+    
+    async def get_team_with_projects(self, team_id: UUID) -> Optional[TeamModel]:
+        """
+        Получает команду с предзагруженными проектами, задачами и исполнителями.
+        Используется для оптимизации запросов в дашборде.
+
+        Аргументы:
+            team_id (UUID): ID команды.
+
+        Возвращает:
+            Optional[TeamModel]: Команда с загруженными вложенными данными или None.
+        """
+        stmt = (
+            select(TeamModel)
+            .options(
+                selectinload(TeamModel.team_projects)
+                    .joinedload(ProjectModel.project_tasks)
+                    .selectinload(TaskModel.executors),
+                joinedload(TeamModel.users)
+            )
+            .where(TeamModel.id == team_id)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalars().unique().first()
 
 
 class ProjectRepository(BaseRepository):
@@ -457,10 +490,32 @@ class TaskRepository(BaseRepository):
         """
         return await self.session.get(self.model, obj_id)
 
-    async def get_by_project_id(self, project_id: UUID) -> Sequence[TaskModel]:
+    async def get_by_project_id(self, project_id: UUID, load_executors: bool = False) -> Sequence[TaskModel]:
+        """
+        Получает все задачи проекта.
+
+        Аргументы:
+            project_id (UUID): ID проекта.
+            load_executors (bool): Флаг предварительной загрузки исполнителей (для оптимизации).
+
+        Возвращает:
+            Sequence[TaskModel]: Список задач.
+        """
         stmt = select(self.model).where(self.model.project_id == project_id)
-        result = await self.session.scalars(stmt)
-        return result.unique().all()
+        
+        if load_executors:
+            # Предзагрузка исполнителей через selectinload (безопасно для коллекций, нет дубликатов строк в основном запросе)
+            # Но если хотим один запрос, то joinedload + unique.
+            # Выбор: selectinload часто быстрее при большом количестве задач, так как делает 2 запроса.
+            # Для дашборда лучше один запрос:
+            stmt = stmt.options(
+                joinedload(self.model.executors)
+            )
+            result = await self.session.execute(stmt)
+            return result.scalars().unique().all()
+        
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
 
     async def get_by_user_id(self, user_id: UUID) -> Sequence[TaskModel]:
         stmt = (
@@ -559,15 +614,32 @@ class TaskExecutorRepository(BaseRepository):
         page: int = 1,
         page_size: int = 10,
     ) -> Tuple[Sequence[TaskModel], int]:
+        """
+        Получает задачи, исполнителем которых является пользователь, с пагинацией.
+
+        Аргументы:
+            user_id (UUID): ID пользователя.
+            page (int): Номер страницы.
+            page_size (int): Размер страницы.
+
+        Возвращает:
+            Tuple[Sequence[TaskModel], int]: Список задач и общее количество.
+        """
         offset = (page - 1) * page_size
+        
+        # Для пагинации важно правильно считать total.
+        # Subquery для count должен совпадать по условиям с основным запросом.
+        
+        # Основной запрос
         stmt = (
             select(TaskModel)
-            .join(TaskExecutorModel)
+            .join(TaskExecutorModel, TaskModel.id == TaskExecutorModel.task_id)
             .where(TaskExecutorModel.user_id == user_id)
         )
 
         # Подсчёт total
-        count_stmt = select(func.count()).select_from(stmt.subquery())
+        # Важно: используем distinct, если есть дубликаты задач (хотя PK уникален, джойн M:N может дать дубли, если у задачи несколько записей в executor? Нет, у задачи один ID. Но если у пользователя одна запись в executor на задачу, то дубликатов нет. Если бы было N:M без проверки уникальности, были бы дубли. Здесь PK composite, так что уникальность есть).
+        count_stmt = select(func.count(TaskModel.id)).select_from(stmt.distinct().subquery())
         total_result = await self.session.execute(count_stmt)
         total: int = total_result.scalar_one()
 
@@ -592,6 +664,21 @@ class MeetingRepository(BaseRepository):
         """
         return await self.session.get(self.model, obj_id)
 
+class CommentRepository(BaseRepository):
+    def __init__(self, session: AsyncSession):
+        super().__init__(session, model=MeetingModel) 
+        
+    async def get_by_id(self, obj_id: UUID) -> Optional[MeetingModel]:
+        """
+        Получает встречу по ID.
+
+        Аргументы:
+            obj_id (UUID): ID встречи.
+
+        Возвращает:
+            Optional[MeetingModel]: Встреча или None.
+        """
+        return await self.session.get(self.model, obj_id)
 
 
 class EventRepository(BaseRepository):

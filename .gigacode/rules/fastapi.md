@@ -1,6 +1,6 @@
 ---
 mode: all
-apply: off
+apply: apply
 ---
 
 # Роль и задача

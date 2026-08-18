@@ -216,48 +216,56 @@
                                 <span class="badge member-count">{{ team.member_count }} участников</span>
                             </div>
                             <div class="card-body">
-                                <!-- Обновлено: использование префикса /views/teams/ -->
+                                <!-- Ссылка на детальный просмотр команды -->
                                 <a href="/views/teams/{{ team.id }}" class="link">Просмотр команды</a>
                             </div>
                         </div>
                         {% endfor %} 
                     {% else %}
-                        <p>Вы не состоите ни в одной команде или они еще не созданы.</p>
+                        <p>Нет доступных команд.</p>
                     {% endif %}
                 </div>
     
-                <!-- Правая колонка: Проекты -->
+             <!-- Правая колонка: Проекты -->
                 <div class="column projects-column">
                     <h2>Проекты</h2>
-                    {% if teams %} 
-                        {% for team in teams %} 
-                            {% if team.projects %} 
-                                {% for project in team.projects %}
-                                <div class="card project-card">
-                                    <div class="card-header">
-                                        <h3>{{ project.name }}</h3>
-                                        <!-- Обновлено: ссылка на детальный просмотр проекта (требуется эндпоинт) -->
-                                        <a href="/views/projects/{{ project.id }}" class="link">Подробнее</a>
-                                    </div>
-                                    <div class="card-body">
-                                        <p>{{ project.description or 'Нет описания' }}</p>
-                                        <ul class="task-list">
-                                            {% for task in project.tasks %}
-                                            <li class="task-item">
-                                                <span class="task-name">{{ task.name }}</span>
-                                                <span class="task-executors">
-                                                    {% for executor in task.executors %}
-                                                        <span class="executor-tag">{{ executor.username or 'Unknown' }}</span>
-                                                    {% endfor %}
-                                                </span>
-                                            </li>
-                                            {% endfor %}
-                                        </ul>
-                                    </div>
+                    <!-- Используем новый ключ 'projects' из контекста -->
+                    {% if projects %} 
+                        {% set found_projects = false %}
+                        {% for project in projects %}
+                            {% set found_projects = true %}
+                            <div class="card project-card">
+                                <div class="card-header">
+                                    <h3>{{ project.name }}</h3>
+                                    <!-- Ссылка на детальный просмотр проекта (если эндпоинт существует) -->
+                                    <a href="/views/projects/{{ project.id }}" class="link">Подробнее</a>
                                 </div>
-                                {% endfor %} 
-                            {% endif %} 
+                                <div class="card-body">
+                                    <p>{{ project.description or 'Нет описания' }}</p>
+                                    <ul class="task-list">
+                                        {% for task in project.tasks %}
+                                        <li class="task-item">
+                                            <span class="task-name">{{ task.name }}</span>
+                                            <span class="task-executors">
+                                                {% for executor in task.executors %}
+                                                    {% if executor.user and executor.user.username %}
+                                                        <span class="executor-tag">{{ executor.user.username }}</span>
+                                                    {% else %}
+                                                        <span class="executor-tag">Unknown</span>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            </span>
+                                        </li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            </div>
                         {% endfor %} 
+                        {% if not found_projects %}
+                            <p>Нет доступных проектов.</p>
+                        {% endif %}
+                    {% else %}
+                        <p>Нет доступных проектов.</p>
                     {% endif %}
                 </div>
             </div>

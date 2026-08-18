@@ -366,6 +366,7 @@ class CachedUnitOfWork:
                 TaskRepository,
                 TeamRepository,
                 UserRepository,
+                CommentRepository
             )
 
             self.users: UserRepository
@@ -375,6 +376,7 @@ class CachedUnitOfWork:
             self.task_executors: TaskExecutorRepository
             self.meetings: MeetingRepository
             self.events: EventRepository
+            self.comments: CommentRepository
 
         self.__uow = await self.__database_manger.uow().__aenter__()
 
@@ -419,6 +421,13 @@ class CachedUnitOfWork:
             repository_obj=self.__uow.events,
             cache_manager=self.__cache_manager,
             key_prefix="events",
+            time_segment=self.__time_segment,
+        )
+        
+        self.comments = CachedRepositoryProxy(  # ty: ignore[invalid-assignment]
+            repository_obj=self.__uow.comments,
+            cache_manager=self.__cache_manager,
+            key_prefix="comments",
             time_segment=self.__time_segment,
         )
         return self

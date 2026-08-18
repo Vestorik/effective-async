@@ -24,7 +24,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, status
 
-from app.src.api.api_utils import DependsDataManager
+from app.src.api.utils.api_utils import DependsDataManager
 from app.src.api.handlers.project_handlers import (
     create_project,
     delete_project,

@@ -11,9 +11,12 @@ from app.src.api.shems import (
     TeamWithProjectsOutSheme,
 )
 from app.src.dal.database.repositories import (
+    ProjectModel,
     ProjectRepository,
     TaskExecutorRepository,
+    TaskModel,
     TaskRepository,
+    TeamModel,
     TeamRepository,
 )
 
@@ -42,60 +45,128 @@ class DashboardService(BaseService):
         """
         self.session = session
 
-    async def get_dashboard_data(self, user_id: UUID) -> list[TeamWithProjectsOutSheme]:
+    async def get_dashboard_data(self, user_id: UUID) -> dict:
         """
         Получает данные для дашборда.
 
-        Возвращает список команд, в которых состоит пользователь (или все команды,
-        если логика позволяет). Для каждой команды возвращает связанные проекты.
-        Для каждого проекта возвращает задачи с исполнителями.
-
         Аргументы:
-            user_id (UUID): ID текущего пользователя для фильтрации.
+            user_id (UUID): ID текущего пользователя (используется для фильтрации, если требуется).
 
         Возвращает:
-            List[TeamWithProjectsOutSheme]: Структурированный список команд и проектов.
+            dict: Словарь с данными для дашборда, содержащий:
+                - 'teams': список команд с их проектами.
+                - 'projects': список всех проектов (включая те, что не привязаны к текущим командам, если возможно, или все проекты).
+        
+        Замечание: 
+        В текущей архитектуре проекты привязаны к командам. Если проект не отображается, 
+        значит он не привязан ни к одной из загруженных команд. 
+        Здесь мы возвращаем два отдельных списка для гибкости шаблона.
         """
         team_repo = TeamRepository(self.session)
-        project_repo = ProjectRepository(self.session)
-        task_repo = TaskRepository(self.session)
-        executor_repo = TaskExecutorRepository(self.session)
-
+        
+        # 1. Получаем все команды
         all_teams = await team_repo.get_all()
-
+        
         result_teams = []
-
         for team in all_teams:
-            # Получаем проекты для команды
-            projects = await self._get_projects_for_team(project_repo, team.id)
+            team_with_data = await team_repo.get_team_with_projects(team.id)  # ty: ignore[invalid-argument-type]
+            if team_with_data:
+                team_schema = self._serialize_team(team_with_data)
+                result_teams.append(team_schema)
+        
+        # 2. Получаем все проекты (без привязки к команде в цикле)
+        # Это позволит отобразить проекты, которые могут быть "сиротами" или привязаны к командам из другой выборки
+        # Или просто все проекты в системе, если доступ разрешен.
+        # Используем selectinload для предварительной загрузки задач и исполнителей для всех проектов сразу
+        all_projects = await self._fetch_all_projects_with_tasks()
+        
+        # Если нужно фильтровать проекты по пользователю, это можно сделать здесь
+        # for MVP: возвращаем все проекты
+        filtered_projects = all_projects 
+        
+        return {
+            "teams": result_teams,
+            "projects": filtered_projects
+        }
+        
+    async def _fetch_all_projects_with_tasks(self) -> list[ProjectWithTasksOutSheme]:
+        """
+        Загружает все проекты с задачами и исполнителями для глобального списка.
 
-            project_objects = []
-            for proj in projects:
-                # Получаем задачи для проекта
-                tasks = await self._get_tasks_for_project(task_repo, proj.id)
-
-                # Получаем исполнителей для каждой задачи
-                enriched_tasks = await self._enrich_tasks_with_executors(
-                    executor_repo, task_repo, tasks
-                )
-
-                task_shemes = [
-                    TaskWithExecutorsOutSheme.model_validate(t) for t in enriched_tasks
-                ]
-
-                proj_schema = ProjectWithTasksOutSheme(
-                    name=proj.name, description=proj.description, tasks=task_shemes
-                )
-                project_objects.append(proj_schema)
-
-            team_schema = TeamWithProjectsOutSheme(
-                name=team.name,
-                member_count=len(await self._get_members_for_team(team_repo, team.id)),
-                projects=project_objects,
+        Возвращает:
+            list[ProjectWithTasksOutSheme]: Список проектов.
+        """
+        # Используем репозиторий или прямой запрос для получения всех проектов
+        # Для оптимизации используем selectinload
+        from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
+        
+        stmt = (
+            select(ProjectModel)
+            .options(
+                selectinload(ProjectModel.project_tasks)
+                    .selectinload(TaskModel.executors)
             )
-            result_teams.append(team_schema)
+        )
+        result = await self.session.execute(stmt)
+        projects = result.scalars().unique().all()
+        
+        schemas = []
+        for proj in projects:
+            tasks = []
+            for task in proj.project_tasks:
+                executors = task.executors if task.executors else []
+                task_schema = TaskWithExecutorsOutSheme(
+                    name=task.name,
+                    description=task.description,
+                    executors=executors,
+                )
+                tasks.append(task_schema)
+            
+            proj_schema = ProjectWithTasksOutSheme(
+                name=proj.name,
+                description=proj.description,
+                tasks=tasks,
+            )
+            schemas.append(proj_schema)
+            
+        return schemas
+    
+    def _serialize_team(self, team: TeamModel) -> TeamWithProjectsOutSheme:
+        """
+        Преобразует ORM-модель команды в Pydantic-схему для отправки в ответе.
 
-        return result_teams
+        Аргументы:
+            team (TeamModel): Объект команды с предзагруженными связями.
+
+        Возвращает:
+            TeamWithProjectsOutSheme: Схема данных команды.
+        """
+        projects = []
+        for proj in team.team_projects:
+            tasks = []
+            for task in proj.project_tasks:
+                # Исполнители уже загружены через selectinload
+                executors = task.executors if task.executors else []
+                task_schema = TaskWithExecutorsOutSheme(
+                    name=task.name,
+                    description=task.description,
+                    executors=executors,
+                )
+                tasks.append(task_schema)
+            
+            proj_schema = ProjectWithTasksOutSheme(
+                name=proj.name,
+                description=proj.description,
+                tasks=tasks,
+            )
+            projects.append(proj_schema)
+
+        return TeamWithProjectsOutSheme(
+            name=team.name,
+            member_count=len(team.users),
+            projects=projects,
+        )
 
     async def _get_projects_for_team(
         self, project_repo: ProjectRepository, team_id: UUID

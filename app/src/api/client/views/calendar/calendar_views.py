@@ -49,7 +49,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from app.src.api.api_utils import DependsDataManager
+from app.src.api.utils.api_utils import DependsDataManager
 from app.src.api.services.auth import RoleType, require_permissions
 from app.src.api.client.views._views_base import templates, prefix
 

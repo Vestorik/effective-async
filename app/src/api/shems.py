@@ -112,6 +112,37 @@ class TeamSchema(BaseModelSheme):
     """
 
     name: str
+    
+class TeamSchemaOut(TeamSchema):
+    """
+    Схема команды для выхода (GET).
+    """
+
+    
+    created_at: datetime
+    name: str
+    users: list[UserOutSheme]
+    team_projects: list[ProjectSchema]
+    
+    @property
+    def member_count(self) -> int:
+        """
+        Вычисляет количество участников команды.
+        
+        Возвращает:
+            int: Количество пользователей в команде.
+        """
+        return len(self.users)
+    
+    @property
+    def project_count(self) -> int:
+        """
+        Вычисляет количество участников команды.
+        
+        Возвращает:
+            int: Количество пользователей в команде.
+        """
+        return len(self.team_projects)
 
 class TeamCreate(TeamSchema):
     manager_id : UUID
@@ -224,10 +255,8 @@ class MeetingSheme(TimeEventSheme):
 
     Наследует start_datetime и end_datetime от TimeEventSheme.
     """
+    pass
 
-    id: UUID
-    created_at: datetime
-    updated_at: datetime
 
 
 class EventSheme(TimeEventSheme):
@@ -236,10 +265,8 @@ class EventSheme(TimeEventSheme):
 
     Наследует start_datetime и end_datetime от TimeEventSheme.
     """
+    pass
 
-    id: UUID
-    created_at: datetime
-    updated_at: datetime
     
     
 

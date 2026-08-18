@@ -1,12 +1,7 @@
-
-"""
-Утилиты для доставки зависимостей в FastAPI-эндпоинтах.
-
-Используется для передачи объектов, созданных в lifespan (например, data_manager).
-"""
-
 from typing import Annotated
+
 from fastapi import Depends, Request
+from app.src.base.config import _GLOBAL_DATABASE_MANAGER
 from app.src.dal.main import DataManager
 
 
@@ -21,14 +16,22 @@ def get_data_manager(request: Request) -> DataManager:
         DataManager: Один и тот же экземпляр, созданный при старте приложения.
 
     Возможные исключения:
-        AttributeError: Если `request.app.state.data_manager` не инициализирован.
-
-    Пример:
-        async def get_user(user_id: UUID, data_manager: DependsDataManager):
-            async with data_manager() as uow:
-                ...
+        RuntimeError: Если `data_manager` не инициализирован.
     """
-    return request.app.state.data_manager
+    # 1. Попытка получить из state (предпочтительно, если есть request)
+    if request:
+        db_manager: DataManager | None = getattr(request.app.state, "data_manager", None)
+        if db_manager:
+            return db_manager
+
+    # 2. Если request нет или в state ничего нет, берем из ContextVar
+    db_manager = _GLOBAL_DATABASE_MANAGER.get()
+    if db_manager is None:
+        raise RuntimeError(
+            "DataManager не инициализирован. Убедитесь, что lifespan приложения (startapp) успешно выполнил инициализацию БД."
+        )
+
+    return db_manager
 
 
 # Alias для аннотаций

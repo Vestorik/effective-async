@@ -8,7 +8,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError, EmailStr, BaseModel
 
-from app.src.api.api_utils import DependsDataManager
+from app.src.api.utils.api_utils import DependsDataManager
 from app.src.api.exceptions import InvalidCredentials, UserAlreadyExists
 from app.src.api.handlers.user_handlers import create_user_handler
 from app.src.api.services.auth import AuthService

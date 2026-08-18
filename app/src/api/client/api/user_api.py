@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Path, status
 
-from app.src.api.api_utils import DependsDataManager
+from app.src.api.utils.api_utils import DependsDataManager
 from app.src.api.handlers.user_handlers import (
     create_user_handler,
     delete_user_handler,

@@ -46,6 +46,9 @@ class DataManager:
     def cache(self, time_sigment: timedelta) -> CachedUnitOfWork:
         return CachedUnitOfWork(self.__database, self.__cache, time_sigment)
 
+    @property
+    def database_manager(self) -> DataBaseManager:
+        return self.__database
         
     async def close(self) -> None:
         """

@@ -12,27 +12,24 @@
 - Репозитории создаются в handlers.py через uow.users, uow.teams и т.д.
 - Убраны явные commit/rollback — они управляются в UnitOfWork.__aexit__().
 """
-from pydantic.v1.validators import int_validator
 
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from logging import getLogger
-from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, status, Request
+from fastapi import Depends, Request, status
 from fastapi.exceptions import HTTPException
-from fastapi.security import OAuth2PasswordBearer
 from jwt import PyJWTError, decode, encode
 from passlib.context import CryptContext
 from passlib.handlers.argon2 import argon2
 
-from app.src.api.api_utils import DependsDataManager
+from app.src.api.utils.api_utils import DependsDataManager
 from app.src.api.exceptions import InvalidCredentials, UserNotFound
 from app.src.api.shems import UserCreateSheme, UserOutSheme
-from app.src.base.config import MAIN_AUTH_CONFIG
+from app.src.base.config import MAIN_AUTH_CONFIG, AuthConfig
 from app.src.dal.database.models import UserModel
 from app.src.dal.database.repositories import UserRepository
 
@@ -55,11 +52,18 @@ class AuthService:
         get_current_user: Извлекает пользователя из токена (для FastAPI Depends).
     """
 
-    def __init__(self):
-        self.secret_key = MAIN_AUTH_CONFIG.secret_key
-        self.token_expiry_minutes = MAIN_AUTH_CONFIG.token_expiry_minutes
-        self.refresh_token_expray_days = MAIN_AUTH_CONFIG.refresh_token_expiry_days
-        self.auth_algorithm = MAIN_AUTH_CONFIG.algorithm
+    def __init__(self, auth_config: AuthConfig | None = None):
+        if AuthConfig is None or not isinstance(auth_config, AuthConfig):
+            self.secret_key = MAIN_AUTH_CONFIG.secret_key
+            self.token_expiry_minutes = MAIN_AUTH_CONFIG.token_expiry_minutes
+            self.refresh_token_expray_days = MAIN_AUTH_CONFIG.refresh_token_expiry_days
+            self.auth_algorithm = MAIN_AUTH_CONFIG.algorithm
+        else:
+            self.secret_key = auth_config.secret_key
+            self.token_expiry_minutes = auth_config.token_expiry_minutes
+            self.refresh_token_expray_days = auth_config.refresh_token_expiry_days
+            self.auth_algorithm = auth_config.algorithm
+            
 
     async def register(
         self,
@@ -93,6 +97,17 @@ class AuthService:
         await user_repo.create(user)
         return UserOutSheme.model_validate(user)
 
+    def generate_cookie_token(self, user):
+        expires_at = datetime.now(UTC) + timedelta(minutes=self.token_expiry_minutes)
+        payload: dict[str, str | datetime] = {
+            "sub": str(user.id),
+            "email": user.email,
+            "role": user.role,
+            "exp": expires_at,
+        }
+        token = encode(payload, self.secret_key, algorithm="HS256")
+        return {"access_token": token, "token_type": "bearer", "durationin_sec": self.token_expiry_minutes * 60 }
+    
     async def authenticate(
         self,
         user_repo: UserRepository,
@@ -118,15 +133,7 @@ class AuthService:
         if not user or not pwd_context.verify(password, user.hashed_password):
             raise InvalidCredentials()
 
-        expires_at = datetime.now(UTC) + timedelta(minutes=self.token_expiry_minutes)
-        payload: dict[str, str | datetime] = {
-            "sub": str(user.id),
-            "email": user.email,
-            "role": user.role,
-            "exp": expires_at,
-        }
-        token = encode(payload, self.secret_key, algorithm="HS256")
-        return {"access_token": token, "token_type": "bearer", "durationin_sec": self.token_expiry_minutes * 60 }
+        return self.generate_cookie_token(user)
 
     async def verify_token(self, token: str) -> dict[str, str]:
         """

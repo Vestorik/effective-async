@@ -20,7 +20,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Body, HTTPException, Query, status
 from pydantic import BaseModel
-from app.src.api.api_utils import DependsDataManager
+from app.src.api.utils.api_utils import DependsDataManager
 from app.src.api.exceptions import TeamAlreadyExists
 from app.src.api.services.team_service import TeamService
 from app.src.api.shems import TeamSchema, TeamUpdateSheme, TeamCreate

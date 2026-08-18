@@ -27,25 +27,21 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from collections.abc import Callable
 from logging import getLogger
-from typing import Optional
-from uuid import UUID
+from typing import ClassVar
 
-from sqladmin import ModelView, FieldList, FormField
-from sqladmin.forms import get_model_converter
-from sqlalchemy.orm import DeclarativeBase
+from sqladmin import ModelView
 
 from app.src.dal.database.models import (
-    BaseModel,
-    UserModel,
-    TeamModel,
-    ProjectModel,
-    TaskModel,
-    TaskExecutorModel,
     CommentModel,
-    MeetingModel,
     EventModel,
+    MeetingModel,
+    ProjectModel,
+    TaskExecutorModel,
+    TaskModel,
+    TeamModel,
+    UserModel,
 )
 
 logger = getLogger(__name__)
@@ -109,31 +105,27 @@ class UserModelView(ModelView, model=UserModel):
     icon = "fa-solid fa-user"
 
     # Поля списка
-    column_list = ["id", "username", "email", "role", "team_id", "created_at"]
-    column_details_list = column_list + ["hashed_password", "refresh_token_hash"]
-    column_searchable_list = ["username", "email", "role"]
-    column_sortable_list = ["username", "email", "role", "created_at"]
-    column_default_sort = [("created_at", False)]
+    column_list: ClassVar[list[str]] = ["id", "username", "email", "role", "team_id", "created_at"]
+    column_details_list: ClassVar[list[str]] = column_list + ["hashed_password", "refresh_token_hash"]
+    column_searchable_list: ClassVar[list[str]] = ["username", "email", "role"]
+    column_sortable_list: ClassVar[list[str]] = ["username", "email", "role", "created_at"]
+    column_default_sort: ClassVar[list[tuple[str, bool]]] = [("created_at", False)]
 
-    # Форматтеры
-    column_formatters_detail = {
+    column_formatters_detail: ClassVar[dict[str, Callable]] = {
         "hashed_password": lambda m, a: "********" if getattr(m, a, None) else "",
     }
 
-    # Поля формы
-    form_columns = ["username", "email", "role", "hashed_password", "team_id"]
+    form_columns: ClassVar[list[str]] = ["username", "email", "role", "team_id"] 
+    
+    form_excluded_fields: ClassVar[list[str]] = ["id", "created_at", "updated_at", "refresh_token_hash", "task_executors", "comments", "meetings", "team", "hashed_password"]
 
-    # Исключаемые поля (только для детального просмотра)
-    form_excluded_fields = ["id", "created_at", "updated_at", "refresh_token_hash", "task_executors", "comments", "meetings", "team"]
-
-    # Аргументы виджетов
-    form_widget_args = {
+    form_widget_args: ClassVar[dict[str, dict]] = {
         "hashed_password": {"placeholder": "Устанавливается при создании"},
         "email": {"readonly": False},
     }
 
-    form_create_rules = ["username", "email", "role", "hashed_password", "team_id"]
-    form_edit_rules = ["username", "email", "role", "hashed_password", "team_id"]
+    form_create_rules: ClassVar[list[str]] = ["username", "email", "role", "hashed_password", "team_id"]
+    form_edit_rules: ClassVar[list[str]] = ["username", "email", "role", "hashed_password", "team_id"]
 
     async def on_model_change(
         self,
@@ -144,25 +136,45 @@ class UserModelView(ModelView, model=UserModel):
         **kwargs: object,
     ) -> None:
         """
-        Вызывается при сохранении модели (создание или обновление).
+        Хук сохранения модели.
 
-        Если модель создана и пароль не задан — устанавливает дефолтный пароль 'admin'.
+        Назначение:
+            Устанавливает дефолтный пароль при создании пользователя, если он не передан.
 
         Аргументы:
-            data: Словарь с данными из формы.
-            model: Экземпляр UserModel.
-            is_created: Флаг создания новой записи.
-            *args: Дополнительные позиционные аргументы.
-            **kwargs: Дополнительные ключевые аргументы.
+            data: dict - Данные формы.
+            model: UserModel - Экземпляр модели.
+            is_created: bool - Флаг создания новой записи.
+            *args: object - Дополнительные аргументы.
+            **kwargs: object - Дополнительные именованные аргументы.
 
-        Возвращаемое значение:
-            None.
+        Ограничения:
+            - Зависит от наличия метода set_password в UserModel.
+            - Дефолтный пароль 'admin' является временным решением для разработки.
         """
-        if is_created and not model.hashed_password:
-            from passlib.context import CryptContext
-            pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-            model.hashed_password = pwd_context.hash("admin")
+        if is_created:
+            # Используем метод модели, если он есть, вместо прямого вызова CryptContext
+            # Это нарушает DRY, если хеширование вынесено в модель.
+            # Но так как в UserModel нет явного метода set_password, используем passlib.
+            # NOTE: В реальном проекте лучше вынести CryptContext в настройки.
+            model.hashed_password = self._hash_password("admin")
+        
         logger.info("Пользователь сохранён: %s (created=%s)", model.username, is_created)
+
+    def _hash_password(self, plain_password: str) -> str:
+        """
+        Хелпер для хеширования пароля.
+        
+        Аргументы:
+            plain_password: str - Пароль в открытом виде.
+            
+        Возвращаемое значение:
+            str - Захешированный пароль.
+        """
+        from passlib.context import CryptContext
+        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        return pwd_context.hash(plain_password)
+
 
 
 class TeamModelView(ModelView, model=TeamModel):
@@ -182,11 +194,11 @@ class TeamModelView(ModelView, model=TeamModel):
     name_plural = "Команды"
     icon = "fa-solid fa-users"
 
-    column_list = ["id", "name", "created_at"]
-    column_details_list = ["id", "name", "users", "created_at", "updated_at"]
-    column_searchable_list = ["name"]
-    column_sortable_list = ["name", "created_at"]
-    form_columns = ["name"]
+    column_list: ClassVar[list[str]] = ["id", "name", "created_at"]
+    column_details_list: ClassVar[list[str]] = ["id", "name", "users", "created_at", "updated_at"]
+    column_searchable_list: ClassVar[list[str]] = ["name"]
+    column_sortable_list: ClassVar[list[str]] = ["name", "created_at"]
+    form_columns: ClassVar[list[str]] = ["name"]
 
 
 class ProjectModelView(ModelView, model=ProjectModel):
@@ -206,13 +218,12 @@ class ProjectModelView(ModelView, model=ProjectModel):
     name_plural = "Проекты"
     icon = "fa-solid fa-briefcase"
 
-    column_list = ["id", "name", "description", "created_at"]
-    column_details_list = ["id", "name", "description", "project_teams", "project_tasks", "created_at", "updated_at"]
-    column_searchable_list = ["name"]
-    column_sortable_list = ["name", "created_at"]
-    form_columns = ["name", "description"]
-    form_excluded_fields = ["id", "created_at", "updated_at", "project_teams", "project_tasks"]
-
+    column_list: ClassVar[list[str]] = ["id", "name", "description", "created_at"]
+    column_details_list: ClassVar[list[str]] = ["id", "name", "description", "project_teams", "project_tasks", "created_at", "updated_at"]
+    column_searchable_list: ClassVar[list[str]] = ["name"]
+    column_sortable_list: ClassVar[list[str]] = ["name", "created_at"]
+    form_columns: ClassVar[list[str]] = ["name", "description"]
+    form_excluded_fields: ClassVar[list[str]] = ["id", "created_at", "updated_at", "project_teams", "project_tasks"]
 
 class TaskModelView(ModelView, model=TaskModel):
     """
@@ -231,16 +242,15 @@ class TaskModelView(ModelView, model=TaskModel):
     name_plural = "Задачи"
     icon = "fa-solid fa-list-check"
 
-    column_list = ["id", "name", "project_id", "estimate", "parent_id", "created_at"]
-    column_details_list = [
+    column_list: ClassVar[list[str]] = ["id", "name", "project_id", "estimate", "parent_id", "created_at"]
+    column_details_list: ClassVar[list[str]] = [
         "id", "name", "description", "project_id", "parent_id",
         "estimate", "executors", "comments", "created_at", "updated_at",
     ]
-    column_searchable_list = ["name"]
-    column_sortable_list = ["name", "estimate", "created_at"]
-    form_columns = ["name", "description", "project_id", "parent_id", "estimate"]
-    form_excluded_fields = ["id", "created_at", "updated_at", "sub_tasks", "executors", "comments"]
-
+    column_searchable_list: ClassVar[list[str]] = ["name"]
+    column_sortable_list: ClassVar[list[str]] = ["name", "estimate", "created_at"]
+    form_columns: ClassVar[list[str]] = ["name", "description", "project_id", "parent_id", "estimate"]
+    form_excluded_fields: ClassVar[list[str]] = ["id", "created_at", "updated_at", "sub_tasks", "executors", "comments"]
     column_list_select_relations = True
 
 
@@ -260,12 +270,12 @@ class TaskExecutorModelView(ModelView, model=TaskExecutorModel):
     name_plural = "Исполнители задач"
     icon = "fa-solid fa-user-check"
 
-    column_list = ["id", "user_id", "task_id", "estimate", "created_at"]
-    column_details_list = ["user_id", "task_id", "estimate", "user", "task", "created_at", "updated_at"]
-    column_searchable_list = ["user_id", "task_id"]
-    form_columns = ["user_id", "task_id", "estimate"]
-    form_excluded_fields = ["id", "created_at", "updated_at", "user", "task"]
-
+  
+    column_list: ClassVar[list[str]] = ["id", "user_id", "task_id", "estimate", "created_at"]
+    column_details_list: ClassVar[list[str]] = ["user_id", "task_id", "estimate", "user", "task", "created_at", "updated_at"]
+    column_searchable_list: ClassVar[list[str]] = ["user_id", "task_id"]
+    form_columns: ClassVar[list[str]] = ["user_id", "task_id", "estimate"]
+    form_excluded_fields: ClassVar[list[str]] = ["id", "created_at", "updated_at", "user", "task"]
 
 class CommentModelView(ModelView, model=CommentModel):
     """
@@ -283,11 +293,11 @@ class CommentModelView(ModelView, model=CommentModel):
     name_plural = "Комментарии"
     icon = "fa-solid fa-comment"
 
-    column_list = ["id", "description", "author_id", "task_id", "created_at"]
-    column_details_list = ["id", "description", "author_id", "task_id", "author", "task", "created_at", "updated_at"]
-    column_searchable_list = ["description"]
-    form_columns = ["description", "author_id", "task_id"]
-    form_excluded_fields = ["id", "created_at", "updated_at", "author", "task"]
+    column_list: ClassVar[list[str]] = ["id", "description", "author_id", "task_id", "created_at"]
+    column_details_list: ClassVar[list[str]] = ["id", "description", "author_id", "task_id", "author", "task", "created_at", "updated_at"]
+    column_searchable_list: ClassVar[list[str]] = ["description"]
+    form_columns: ClassVar[list[str]] = ["description", "author_id", "task_id"]
+    form_excluded_fields: ClassVar[list[str]] = ["id", "created_at", "updated_at", "author", "task"]
 
 
 class MeetingModelView(ModelView, model=MeetingModel):
@@ -306,16 +316,15 @@ class MeetingModelView(ModelView, model=MeetingModel):
     name_plural = "Встречи"
     icon = "fa-solid fa-calendar-check"
 
-    column_list = ["id", "name", "start_datetime", "end_datetime", "created_at"]
-    column_details_list = [
+    column_list: ClassVar[list[str]] = ["id", "name", "start_datetime", "end_datetime", "created_at"]
+    column_details_list: ClassVar[list[str]] = [
         "id", "name", "description", "start_datetime", "end_datetime",
         "teams", "participants", "created_at", "updated_at",
     ]
-    column_searchable_list = ["name"]
-    column_sortable_list = ["name", "start_datetime", "end_datetime", "created_at"]
-    form_columns = ["name", "description", "start_datetime", "end_datetime", "teams", "participants"]
-    form_excluded_fields = ["id", "created_at", "updated_at"]
-
+    column_searchable_list: ClassVar[list[str]] = ["name"]
+    column_sortable_list: ClassVar[list[str]] = ["name", "start_datetime", "end_datetime", "created_at"]
+    form_columns: ClassVar[list[str]] = ["name", "description", "start_datetime", "end_datetime", "teams", "participants"]
+    form_excluded_fields: ClassVar[list[str]] = ["id", "created_at", "updated_at"]
 
 class EventModelView(ModelView, model=EventModel):
     """
@@ -333,15 +342,15 @@ class EventModelView(ModelView, model=EventModel):
     name_plural = "События"
     icon = "fa-solid fa-calendar-day"
 
-    column_list = ["id", "name", "start_datetime", "end_datetime", "created_at"]
-    column_details_list = [
+    column_list: ClassVar[list[str]] = ["id", "name", "start_datetime", "end_datetime", "created_at"]
+    column_details_list: ClassVar[list[str]] = [
         "id", "name", "description", "start_datetime", "end_datetime",
         "created_at", "updated_at",
     ]
-    column_searchable_list = ["name"]
-    column_sortable_list = ["name", "start_datetime", "end_datetime", "created_at"]
-    form_columns = ["name", "description", "start_datetime", "end_datetime"]
-    form_excluded_fields = ["id", "created_at", "updated_at"]
+    column_searchable_list: ClassVar[list[str]] = ["name"]
+    column_sortable_list: ClassVar[list[str]] = ["name", "start_datetime", "end_datetime", "created_at"]
+    form_columns: ClassVar[list[str]] = ["name", "description", "start_datetime", "end_datetime"]
+    form_excluded_fields: ClassVar[list[str]] = ["id", "created_at", "updated_at"]
 
 
 # =============================================================================

@@ -1,6 +1,161 @@
-{% extends "base.html" %}
+
 
 {% block title %}{{ task.name }}{% endblock %}
+
+
+{% block head %}
+<style>
+    .team-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 2rem;
+    }
+    
+    .team-info {
+        background-color: white;
+        border-radius: 0.5rem;
+        box-shadow: var(--shadow-sm);
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .team-info h1 {
+        font-size: 2rem;
+        font-weight: 600;
+        color: var(--primary-color);
+        margin-bottom: 1rem;
+    }
+    
+    .team-info p {
+        color: var(--secondary-color);
+        margin-bottom: 1rem;
+    }
+    
+    .team-stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+    
+    .stat-item {
+        background-color: var(--light-color);
+        padding: 1rem;
+        border-radius: 0.5rem;
+        text-align: center;
+    }
+    
+    .stat-item h4 {
+        font-size: 2rem;
+        font-weight: bold;
+        color: var(--primary-color);
+        margin-bottom: 0.5rem;
+    }
+    
+    .stat-item p {
+        font-size: 0.875rem;
+        color: var(--secondary-color);
+        margin: 0;
+    }
+    
+    .member-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background-color: var(--primary-color);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        font-weight: 500;
+    }
+    
+    .project-card,
+    .task-card {
+        background-color: white;
+        border-radius: 0.5rem;
+        box-shadow: var(--shadow-sm);
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .project-card h3,
+    .task-card h3 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .project-item,
+    .task-item {
+        padding: 1rem;
+        border: 1px solid var(--border-color);
+        border-radius: 0.375rem;
+        margin-bottom: 0.75rem;
+        transition: background-color 0.2s;
+    }
+    
+    .project-item:hover,
+    .task-item:hover {
+        background-color: var(--light-color);
+    }
+    
+    .project-item h4,
+    .task-item h4 {
+        font-size: 1rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .project-item h4 a,
+    .task-item h4 a {
+        color: var(--primary-color);
+        text-decoration: none;
+    }
+    
+    .project-meta,
+    .task-meta {
+        font-size: 0.75rem;
+        color: var(--secondary-color);
+    }
+    
+    .priority-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    
+    .priority-high { background-color: #fee2e2; color: #991b1b; }
+    .priority-medium { background-color: #fef3c7; color: #92400e; }
+    .priority-low { background-color: #dcfce7; color: #166534; }
+    
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+    }
+    
+    .member-list {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    
+    .role-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        background-color: var(--light-color);
+        color: var(--secondary-color);
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="container">

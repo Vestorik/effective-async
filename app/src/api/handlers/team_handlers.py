@@ -18,7 +18,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
-from app.src.api.api_utils import DataManager
+from app.src.api.utils.api_utils import DataManager
 from app.src.api.exceptions import TeamAlreadyExists
 from app.src.api.services.team_service import TeamService
 from app.src.api.shems import TeamCreate, TeamSchema, TeamUpdateSheme

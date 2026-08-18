@@ -25,7 +25,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from app.src.api.api_utils import DependsDataManager
+from app.src.api.utils.api_utils import DependsDataManager
 from app.src.api.handlers.task_executor_handlers import (
     add_executor_to_task,
     get_executors_for_task_handler,

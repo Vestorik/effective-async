@@ -1,8 +1,9 @@
+import contextvars
 import logging
 import os
 from logging import Formatter, getLogger
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 from urllib.parse import quote_plus
 
 from concurrent_log_handler import ConcurrentRotatingFileHandler
@@ -108,6 +109,14 @@ class UvicornConfig(BaseSettings):
 
 # 🌟 Глобальный экземпляр конфигурации
 uvicorn_config = UvicornConfig()
+
+# Нерекомендуется к использованию, для SQLAdmin
+# Используем ContextVar для безопасного доступа к DataManager из любых потоков
+# в рамках текущего контекста выполнения (например, внутри async-запроса).
+_GLOBAL_DATABASE_MANAGER: contextvars.ContextVar[Any | None] = contextvars.ContextVar(
+    "global_data_manager", 
+    default=None
+)
 
 
 class PostgresDatabaseConfig(BaseSettings):

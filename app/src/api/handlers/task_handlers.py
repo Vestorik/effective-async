@@ -23,7 +23,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
-from app.src.api.api_utils import DataManager
+from app.src.api.utils.api_utils import DataManager
 from app.src.api.exceptions import TaskNotFound, TeamNotFound
 from app.src.api.services.task_service import TaskService
 from app.src.api.shems import (

@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.src.api.api_utils import DataManager
+from app.src.api.utils.api_utils import DataManager
 from app.src.api.exceptions import UserNotFound
 from app.src.api.services.user_service import UserService
 from app.src.api.shems import UserCreateSheme, UserOutSheme, UserUpdateSheme

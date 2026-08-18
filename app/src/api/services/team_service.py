@@ -18,7 +18,7 @@ from typing import List
 from uuid import UUID
 from app.src.api.services.base_services import BaseService
 from app.src.api.exceptions import TeamAlreadyExists, TeamNotFound
-from app.src.api.shems import TeamSchema
+from app.src.api.shems import TeamSchema, TeamSchemaOut
 from app.src.dal.database.models import TeamModel
 from app.src.dal.database.repositories import UserRepository, TeamRepository
 
@@ -142,7 +142,7 @@ class TeamService(BaseService):
             List[TeamSchema]: Список всех команд.
         """
         teams = await team_repo.get_all()
-        return [TeamSchema.model_validate(team) for team in teams]
+        return [TeamSchemaOut.model_validate(team, extra='allow') for team in teams]
     
     async def join_team(
         self,

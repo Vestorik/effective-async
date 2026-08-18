@@ -5,7 +5,7 @@
 Отображает таблицу всех команд с возможностью пагинации.
 """
 
-{% extends "base.html" %}
+
 
 {% block title %}Команды{% endblock %}
 
@@ -115,7 +115,7 @@
             <h4 style="font-size: 0.875rem; color: var(--secondary-color); margin-bottom: 0.5rem;">Участники:</h4>
             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                 {% for user in team.users[:5] %}
-                <div class="member-avatar">{{ user.name[:1] }}</div>
+                <div class="member-avatar">{{ user.username }}</div>
                 {% endfor %}
                 {% if team.member_count > 5 %}
                 <div class="member-avatar" style="background-color: var(--secondary-color);">+{{ team.member_count - 5 }}</div>
@@ -125,30 +125,5 @@
     </div>
     {% endfor %}
     
-    {% if pagination.total_pages > 1 %}
-    <div class="pagination" style="justify-content: center; margin-top: 2rem;">
-        {% if pagination.has_previous %}
-        <a href="/teams?page={{ pagination.prev_page }}" class="pagination-item">←</a>
-        {% else %}
-        <span class="pagination-item disabled">←</span>
-        {% endif %}
-        
-        {% for page in pagination.pages %}
-        {% if page == pagination.current_page %}
-        <span class="pagination-item active">{{ page }}</span>
-        {% elif page == '...' %}
-        <span class="pagination-item disabled">...</span>
-        {% else %}
-        <a href="/teams?page={{ page }}" class="pagination-item">{{ page }}</a>
-        {% endif %}
-        {% endfor %}
-        
-        {% if pagination.has_next %}
-        <a href="/teams?page={{ pagination.next_page }}" class="pagination-item">→</a>
-        {% else %}
-        <span class="pagination-item disabled">→</span>
-        {% endif %}
-    </div>
-    {% endif %}
 </div>
 {% endblock %}

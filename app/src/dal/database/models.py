@@ -82,10 +82,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
 from logging import getLogger
-from typing import Optional
 from uuid import UUID, uuid4
 
 from passlib.context import CryptContext
@@ -105,7 +103,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 logger = getLogger(__name__)
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 
 class BaseModel(DeclarativeBase):
@@ -129,15 +127,15 @@ class BaseModel(DeclarativeBase):
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
         comment="Дата и время создания записи в UTC.",
     )
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
         comment="Время последнего обновления",
     )
@@ -203,6 +201,136 @@ class TimeEventMixin:
     )
 
 
+class TaskExecutorModel(BaseModel):
+    __tablename__ = "task_executors"
+    __table_args__ = (PrimaryKeyConstraint("user_id", "task_id"),)
+
+    id: Mapped[None] = mapped_column(
+        SQL_UUID(as_uuid=True),
+        primary_key=False,
+        nullable=True,
+        comment="Не используется (для совместимости с BaseModel).",
+    )
+
+    #  Main field
+    estimate: Mapped[int] = mapped_column(
+        Integer, nullable=True, comment="Оценка исполнителя за выполненую задачу"
+    )
+
+    user_id: Mapped[UUID] = mapped_column(
+        SQL_UUID(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=False,
+        comment="Внешний ключ на пользователя (обязательный, исполнитель).",
+    )
+    user: Mapped[UserModel] = relationship(
+        back_populates="task_executors",
+        lazy="joined",
+    )
+
+    task_id: Mapped[UUID] = mapped_column(
+        SQL_UUID(as_uuid=True),
+        ForeignKey("tasks.id"),
+        nullable=False,
+        comment="Внешний ключ на задачу (обязательный, задача исполнителя).",
+    )
+    task: Mapped[TaskModel] = relationship(
+        back_populates="executors",
+        lazy="joined",
+    )
+
+
+class TaskModel(BaseModel):
+    __tablename__ = "tasks"
+
+    name: Mapped[str] = mapped_column(String(124), nullable=False)
+    description: Mapped[str] = mapped_column(String(512), nullable=True)
+
+    estimate: Mapped[int] = mapped_column(
+        Integer, nullable=True, comment="Оценка задачи"
+    )
+
+    id: Mapped[SQL_UUID] = mapped_column(
+        SQL_UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+        comment="Уникальный идентификатор записи (UUID).",
+    )
+
+    #  sub tasks
+    parent_id: Mapped[UUID | None] = mapped_column(
+        SQL_UUID(as_uuid=True),
+        ForeignKey("tasks.id"),
+        nullable=True,
+        index=True,
+        comment="Внешний ключ на родительскую задачу (самоссылка 1:N).",
+    )
+    parent: Mapped[TaskModel | None] = relationship(
+        "TaskModel",
+        remote_side=[id],
+        back_populates="sub_tasks",
+    )
+    sub_tasks: Mapped[list[TaskModel]] = relationship(
+        "TaskModel",
+        back_populates="parent",
+        cascade="all, delete-orphan",
+    )
+
+    executors: Mapped[list[TaskExecutorModel] | None] = relationship(
+        back_populates="task",
+        cascade="all, delete-orphan",
+        lazy="joined",
+    )
+
+    project_id: Mapped[UUID | None] = mapped_column(
+        SQL_UUID(as_uuid=True),
+        ForeignKey("projects.id"),
+        nullable=True,
+        index=True,
+        comment="Внешний ключ на проект (1:N).",
+    )
+    project: Mapped[ProjectModel | None] = relationship(
+        back_populates="project_tasks",
+    )
+
+    comments: Mapped[list[CommentModel]] = relationship(
+        "CommentModel",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+
+class CommentModel(BaseModel):
+    __tablename__ = "comments"
+
+    description: Mapped[str] = mapped_column(String(512), nullable=False)
+
+    author_id: Mapped[UUID | None] = mapped_column(
+        SQL_UUID(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=False,
+        comment="Внешний ключ на автора.",
+        index=True,
+    )
+
+    task_id: Mapped[UUID | None] = mapped_column(
+        SQL_UUID(as_uuid=True),
+        ForeignKey("tasks.id"),
+        nullable=True,
+        comment="Внешний ключ на задачу.",
+        index=True,
+    )
+
+    author: Mapped[UserModel | None] = relationship(
+        "UserModel", back_populates="comments"
+    )
+
+    task: Mapped[TaskModel | None] = relationship(
+        "TaskModel", back_populates="comments"
+    )
+
+
 class UserModel(BaseModel):
     """
     Модель пользователя системы.
@@ -254,7 +382,7 @@ class UserModel(BaseModel):
         comment="Хэшированный пароль пользователя, созданный с помощью bcrypt.",
     )
 
-    refresh_token_hash: Mapped[Optional[str]] = mapped_column(
+    refresh_token_hash: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
         comment="Хэш refresh_token для обеспечения безопасного logout и ротации сессий.",
@@ -282,30 +410,30 @@ class UserModel(BaseModel):
         self.hashed_password = pwd_context.hash(password)
 
     # 1:n один пользователь одна комманда, в комманде много пользователей
-    team_id: Mapped[Optional[UUID]] = mapped_column(
+    team_id: Mapped[UUID | None] = mapped_column(
         SQL_UUID(as_uuid=True),
         ForeignKey("teams.id"),
         nullable=True,
         comment="Внешний ключ на команду (1:N, пользователь в одной команде).",
     )
-    team: Mapped[Optional["TeamModel"]] = relationship(
+    team: Mapped[TeamModel | None] = relationship(
         back_populates="users",
         lazy="select",
         uselist=False,  # <-- 1:1 для пользователя
     )
-    task_executors: Mapped[list["TaskExecutorModel"]] = relationship(
+    task_executors: Mapped[list[TaskExecutorModel]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
     )
 
-    comments: Mapped[list["CommentModel"]] = relationship(
+    comments: Mapped[list[CommentModel]] = relationship(
         "CommentModel",
         back_populates="author",
         cascade="all, delete-orphan",
         lazy="selectin",
     )
 
-    meetings: Mapped[list["MeetingModel"]] = relationship(
+    meetings: Mapped[list[MeetingModel]] = relationship(
         secondary=meeting_participants_table,
         back_populates="participants",
     )
@@ -317,19 +445,19 @@ class TeamModel(BaseModel):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
 
     # 1:n один пользователь одна комманда, в комманде много пользователей
-    users: Mapped[list["UserModel"]] = relationship(
+    users: Mapped[list[UserModel]] = relationship(
         back_populates="team",
         lazy="select",
     )
 
     # n:m у команды много проектов, в 1 проекте может быть несколько команд
-    team_projects: Mapped[list["ProjectModel"]] = relationship(
+    team_projects: Mapped[list[ProjectModel]] = relationship(
         secondary=team_project_table,
         back_populates="project_teams",
         lazy="joined",
     )
 
-    meetings: Mapped[list["MeetingModel"]] = relationship(
+    meetings: Mapped[list[MeetingModel]] = relationship(
         secondary=meeting_teams_table,
         back_populates="teams",
     )
@@ -344,173 +472,42 @@ class ProjectModel(BaseModel):
         comment="Название проекта.",
         unique=True,
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         String(512), nullable=True, comment="Описание проекта."
     )
 
     # n:m у команды много проектов, в 1 проекте может быть несколько команд
-    project_teams: Mapped[list["TeamModel"]] = relationship(
+    project_teams: Mapped[list[TeamModel]] = relationship(
         secondary=team_project_table,
         back_populates="team_projects",
     )
 
     # 1:n У проекта много задач, у задач один проект
-    project_tasks: Mapped[list["TaskModel"]] = relationship(
+    project_tasks: Mapped[list[TaskModel]] = relationship(
         back_populates="project",
         cascade="all, delete-orphan",
     )
 
 
-class TaskModel(BaseModel):
-    __tablename__ = "tasks"
-
-    name: Mapped[str] = mapped_column(String(124), nullable=False)
-    description: Mapped[str] = mapped_column(String(512), nullable=True)
-
-    estimate: Mapped[int] = mapped_column(
-        Integer, nullable=True, comment="Оценка задачи"
-    )
-
-    id: Mapped[SQL_UUID] = mapped_column(
-        SQL_UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid4,
-        comment="Уникальный идентификатор записи (UUID).",
-    )
-
-    #  sub tasks
-    parent_id: Mapped[Optional[UUID]] = mapped_column(
-        SQL_UUID(as_uuid=True),
-        ForeignKey("tasks.id"),
-        nullable=True,
-        index=True,
-        comment="Внешний ключ на родительскую задачу (самоссылка 1:N).",
-    )
-    parent: Mapped[Optional["TaskModel"]] = relationship(
-        "TaskModel",
-        remote_side=[id],
-        back_populates="sub_tasks",
-    )
-    sub_tasks: Mapped[list["TaskModel"]] = relationship(
-        "TaskModel",
-        back_populates="parent",
-        cascade="all, delete-orphan",
-    )
-
-    executors: Mapped[Optional[list["TaskExecutorModel"]]] = relationship(
-        back_populates="task",
-        cascade="all, delete-orphan",
-        lazy="joined",
-    )
-
-    project_id: Mapped[Optional[UUID]] = mapped_column(
-        SQL_UUID(as_uuid=True),
-        ForeignKey("projects.id"),
-        nullable=True,
-        index=True,
-        comment="Внешний ключ на проект (1:N).",
-    )
-    project: Mapped[Optional["ProjectModel"]] = relationship(
-        back_populates="project_tasks",
-    )
-
-    comments: Mapped[list["CommentModel"]] = relationship(
-        "CommentModel",
-        back_populates="task",
-        cascade="all, delete-orphan",
-        lazy="selectin",
-    )
-
-
-class TaskExecutorModel(BaseModel):
-    __tablename__ = "task_executors"
-    __table_args__ = (PrimaryKeyConstraint("user_id", "task_id"),)
-
-    id: Mapped[None] = mapped_column(
-        SQL_UUID(as_uuid=True),
-        primary_key=False,
-        nullable=True,
-        comment="Не используется (для совместимости с BaseModel).",
-    )
-
-    #  Main field
-    estimate: Mapped[int] = mapped_column(
-        Integer, nullable=True, comment="Оценка исполнителя за выполненую задачу"
-    )
-
-    user_id: Mapped[UUID] = mapped_column(
-        SQL_UUID(as_uuid=True),
-        ForeignKey("users.id"),
-        nullable=False,
-        comment="Внешний ключ на пользователя (обязательный, исполнитель).",
-    )
-    user: Mapped["UserModel"] = relationship(
-        back_populates="task_executors",
-        lazy="joined",
-    )
-
-    task_id: Mapped[UUID] = mapped_column(
-        SQL_UUID(as_uuid=True),
-        ForeignKey("tasks.id"),
-        nullable=False,
-        comment="Внешний ключ на задачу (обязательный, задача исполнителя).",
-    )
-    task: Mapped["TaskModel"] = relationship(
-        back_populates="executors",
-        lazy="joined",
-    )
-
-
-class CommentModel(BaseModel):
-    __tablename__ = "comments"
-
-    description: Mapped[str] = mapped_column(String(512), nullable=False)
-
-    author_id: Mapped[Optional[UUID]] = mapped_column(
-        SQL_UUID(as_uuid=True),
-        ForeignKey("users.id"),
-        nullable=False,
-        comment="Внешний ключ на автора.",
-        index=True,
-    )
-
-    task_id: Mapped[Optional[UUID]] = mapped_column(
-        SQL_UUID(as_uuid=True),
-        ForeignKey("tasks.id"),
-        nullable=True,
-        comment="Внешний ключ на задачу.",
-        index=True,
-    )
-
-    author: Mapped[Optional["UserModel"]] = relationship(
-        "UserModel", back_populates="comments"
-    )
-
-    task: Mapped[Optional["TaskModel"]] = relationship(
-        "TaskModel", back_populates="comments"
-    )
-
-
 class MeetingModel(BaseModel, TimeEventMixin):
     __tablename__ = "meetings"
-    
+
     name: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
         comment="Название встречи.",
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         String(512), nullable=True, comment="Описание встречи."
     )
 
-
-    teams: Mapped[list["TeamModel"]] = relationship(
+    teams: Mapped[list[TeamModel]] = relationship(
         secondary="meeting_teams",
         back_populates="meetings",
         lazy="selectin",
     )
 
-    participants: Mapped[list["UserModel"]] = relationship(
+    participants: Mapped[list[UserModel]] = relationship(
         secondary="meeting_participants",
         back_populates="meetings",
         lazy="selectin",
@@ -525,9 +522,10 @@ class EventModel(BaseModel, TimeEventMixin):
         nullable=False,
         comment="Название события.",
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         String(512), nullable=True, comment="Описание события."
     )
+
 
 def check_time_range_ddl(table_name: str) -> DDL:
     """

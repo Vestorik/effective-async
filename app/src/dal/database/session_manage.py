@@ -72,6 +72,7 @@ from tenacity import (
 )
 
 from app.src.dal.database.repositories import (
+    CommentRepository,
     EventRepository,
     MeetingRepository,
     ProjectRepository,
@@ -275,6 +276,7 @@ class UnitOfWork:
         self.task_executors = TaskExecutorRepository(self.session)
         self.meetings = MeetingRepository(self.session)
         self.events = EventRepository(self.session)
+        self.comments = CommentRepository(self.session)
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:

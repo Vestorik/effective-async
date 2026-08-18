@@ -4,15 +4,15 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
-from app.src.api.client.views._views_base import templates, prefix
 
-from app.src.api.api_utils import DependsDataManager
+from app.src.api.client.views._views_base import prefix, templates
 from app.src.api.exceptions import TaskNotFound, TeamNotFound
 from app.src.api.services.auth import RoleType, require_permissions
 from app.src.api.services.dashboard_service import DashboardService
 from app.src.api.services.task_service import TaskService
 from app.src.api.services.team_service import TeamService
 from app.src.api.shems import TaskWithExecutorsOutSheme
+from app.src.api.utils.api_utils import DependsDataManager
 
 logger = getLogger(__name__)
 
@@ -53,11 +53,13 @@ async def dashboard_view(
                 request=request,
                 context={"teams": teams_data},
             )
-    except Exception as e:
-        logger.error(f"Ошибка загрузки дашборда: {e}")
-        # В продакшене лучше перенаправлять на страницу ошибки или показывать дефолтное сообщение
+    except TeamNotFound:
+        raise HTTPException(status_code=404, detail="Не удалось найти данные")
+    except Exception:
+        logger.exception("Ошибка загрузки дашборда") # Логируем полный стек ошибки
+        # Возвращаем шаблон по корректному пути или стандартный error.html
         return templates.TemplateResponse(
-            name="error/500.html",
+            name="error.html",
             request=request,
             context={"error": "Не удалось загрузить данные дашборда"},
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -92,7 +94,7 @@ async def teams_list(
             teams = await team_service.get_all_teams(team_repo=uow.teams)
 
             return templates.TemplateResponse(
-                name=f"{prefix}pages/teams/list.html",
+                name="pages/teams/list.html",
                 request=request,
                 context={"teams": teams, "current_user_id": str(current_user_id)},
             )
@@ -137,7 +139,7 @@ async def team_detail(
 
             return templates.TemplateResponse(
                 request=request,
-                name=f"{prefix}pages/teams/detail.html",
+                name="pages/teams/detail.html",
                 context={"team": team, "current_user_id": str(current_user_id)},
             )
     except TeamNotFound:
@@ -290,7 +292,7 @@ async def tasks_list(
                 enriched_tasks.append(task_with_exec)
 
             return templates.TemplateResponse(
-                name=f"{prefix}pages/tasks/list.html",
+                name="pages/tasks/list.html",
                 context={
                     "tasks": enriched_tasks,
                     "team_id": str(team_id),
@@ -351,7 +353,7 @@ async def task_detail(
             )
 
             return templates.TemplateResponse(
-                name=f"{prefix}pages/tasks/detail.html",
+                name="pages/tasks/detail.html",
                 context={"task": task_sheme, "current_user_id": str(current_user_id)},
                 request=request,
             )
