@@ -2,12 +2,12 @@ from logging import getLogger
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.src.api.client.views._views_base import prefix, templates
 from app.src.api.exceptions import TaskNotFound, TeamNotFound
-from app.src.api.services.auth import RoleType, require_permissions
+from app.src.api.services.auth import RoleType, RequirePermissions
 from app.src.api.services.dashboard_service import DashboardService
 from app.src.api.services.task_service import TaskService
 from app.src.api.services.team_service import TeamService
@@ -30,7 +30,7 @@ async def dashboard_view(
     current_user_id: Annotated[
         UUID,
         Depends(
-            require_permissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
+            RequirePermissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
         ),
     ],
 ):
@@ -58,12 +58,7 @@ async def dashboard_view(
     except Exception:
         logger.exception("Ошибка загрузки дашборда") # Логируем полный стек ошибки
         # Возвращаем шаблон по корректному пути или стандартный error.html
-        return templates.TemplateResponse(
-            name="error.html",
-            request=request,
-            context={"error": "Не удалось загрузить данные дашборда"},
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
+        raise HTTPException(status_code=500, detail="Не удалось загрузить данные")
 
 
 @team_router_views.get("/", response_class=HTMLResponse)
@@ -73,7 +68,7 @@ async def teams_list(
     current_user_id: Annotated[
         UUID,
         Depends(
-            require_permissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
+            RequirePermissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
         ),
     ],
 ):
@@ -111,7 +106,7 @@ async def team_detail(
     current_user_id: Annotated[
         UUID,
         Depends(
-            require_permissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
+            RequirePermissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
         ),
     ],
 ):
@@ -158,7 +153,7 @@ async def create_team(
     current_user_id: Annotated[
         UUID,
         Depends(
-            require_permissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
+            RequirePermissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
         ),
     ],
     name: str = Form(...),
@@ -186,8 +181,7 @@ async def create_team(
             )
     except Exception as e:
         logger.error(f"Ошибка создания команды: {e}")
-        # В реальном приложении нужно передать ошибку в контекст шаблона
-        # Но так как мы перенаправляем, будем считать успехом для MVP
+        raise HTTPException(status_code=500, detail="Не удалось создать команду")
 
     return RedirectResponse(url="/views/teams", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -199,7 +193,7 @@ async def join_team(
     current_user_id: Annotated[
         UUID,
         Depends(
-            require_permissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
+            RequirePermissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
         ),
     ],
     team_id: UUID = Form(...),
@@ -242,14 +236,14 @@ async def join_team(
 async def tasks_list(
     request: Request,
     data_manager: DependsDataManager,
-    team_id: UUID,
+    team_id: Annotated[UUID, Query(...)],
     current_user_id: Annotated[
         UUID,
         Depends(
-            require_permissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
+            RequirePermissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
         ),
     ],
-    priority: str | None = Form(None),
+    priority: str | None = Query(None),
 ):
     """
     Отображение списка задач для команды.
@@ -288,6 +282,7 @@ async def tasks_list(
                     name=task.name,
                     description=task.description,
                     executors=executors,
+                    created_at=task.created_at
                 )
                 enriched_tasks.append(task_with_exec)
 
@@ -304,7 +299,7 @@ async def tasks_list(
     except TeamNotFound:
         raise HTTPException(status_code=404, detail="Команда не найдена")
     except Exception as e:
-        logger.error(f"Ошибка загрузки списка задач: {e}")
+        logger.exception(f"Неожиданная ошибка при загрузке списка задач: {e}")
         raise HTTPException(status_code=500, detail="Не удалось загрузить задачи")
 
 
@@ -316,7 +311,7 @@ async def task_detail(
     current_user_id: Annotated[
         UUID,
         Depends(
-            require_permissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
+            RequirePermissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
         ),
     ],
 ):
@@ -334,7 +329,6 @@ async def task_detail(
     """
     try:
         async with data_manager() as uow:
-            task_service = TaskService()
 
             # Получаем задачу
             task = await uow.tasks.get_by_id(task_id)
@@ -350,6 +344,7 @@ async def task_detail(
                 project_id=task.project_id,
                 parent_id=task.parent_id,
                 executors=executors,
+                created_at=task.created_at
             )
 
             return templates.TemplateResponse(
@@ -373,7 +368,7 @@ async def create_task(
     current_user_id: Annotated[
         UUID,
         Depends(
-            require_permissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
+            RequirePermissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
         ),
     ],
     team_id: UUID = Form(...),
@@ -439,7 +434,7 @@ async def update_task(
     current_user_id: Annotated[
         UUID,
         Depends(
-            require_permissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
+            RequirePermissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
         ),
     ],
     name: str = Form(...),
@@ -486,7 +481,7 @@ async def delete_task(
     current_user_id: Annotated[
         UUID,
         Depends(
-            require_permissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
+            RequirePermissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
         ),
     ],
 ):
@@ -514,7 +509,7 @@ async def delete_task(
         logger.error(f"Ошибка удаления задачи: {e}")
         raise HTTPException(status_code=400, detail="Не удалось удалить задачу")
 
-    # Перенаправляем на страницу, с которой пришли (можно улучшить через referer)
+    # Перенаправляем на страницу, с которой пришли
     # Для MVP перенаправляем на общий список или 404 если unknown
     return RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -526,7 +521,7 @@ async def add_executor_to_task(
     current_user_id: Annotated[
         UUID,
         Depends(
-            require_permissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
+            RequirePermissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
         ),
     ],
     task_id: UUID = Form(...),
@@ -577,7 +572,7 @@ async def update_executor_estimate(
     current_user_id: Annotated[
         UUID,
         Depends(
-            require_permissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
+            RequirePermissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
         ),
     ],
     task_id: UUID = Form(...),

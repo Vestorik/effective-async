@@ -245,6 +245,7 @@ class TaskModel(BaseModel):
 
     name: Mapped[str] = mapped_column(String(124), nullable=False)
     description: Mapped[str] = mapped_column(String(512), nullable=True)
+    priority: Mapped[str] = mapped_column(String(20), nullable=True)
 
     estimate: Mapped[int] = mapped_column(
         Integer, nullable=True, comment="Оценка задачи"
@@ -280,6 +281,18 @@ class TaskModel(BaseModel):
         back_populates="task",
         cascade="all, delete-orphan",
         lazy="joined",
+    )
+    
+    team_id: Mapped[UUID | None] = mapped_column(
+        SQL_UUID(as_uuid=True),
+        ForeignKey("teams.id"),
+        nullable=True,
+        index=True,
+        comment="Внешний ключ на команду (1:N).",
+    )
+    
+    team: Mapped[TeamModel | None] = relationship(
+        back_populates="team_tasks",
     )
 
     project_id: Mapped[UUID | None] = mapped_column(
@@ -460,6 +473,11 @@ class TeamModel(BaseModel):
     meetings: Mapped[list[MeetingModel]] = relationship(
         secondary=meeting_teams_table,
         back_populates="teams",
+    )
+    
+    team_tasks: Mapped[list[TaskModel]] = relationship(
+        back_populates="team",
+        cascade="all, delete-orphan",
     )
 
 

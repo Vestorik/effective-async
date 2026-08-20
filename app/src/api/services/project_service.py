@@ -21,7 +21,7 @@ from typing import List
 from uuid import UUID
 
 from app.src.api.exceptions import ProjectNotFound
-from app.src.api.shems import ProjectSchema
+from app.src.api.shems import ProjectSchema, ProjectSchemaWithID
 from app.src.dal.database.models import ProjectModel, TeamModel
 from app.src.dal.database.repositories import ProjectRepository, TeamRepository
 from app.src.api.services.base_services import BaseService
@@ -113,7 +113,7 @@ class ProjectService(BaseService):
         project = await project_repo.get_by_id(project_id)
         if not project:
             raise ProjectNotFound()
-        return ProjectSchema.model_validate(project)
+        return ProjectSchemaWithID.model_validate(project)
 
     async def get_projects_for_team(
         self,

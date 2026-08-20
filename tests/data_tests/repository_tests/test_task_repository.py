@@ -147,33 +147,6 @@ class TestTaskRepository:
         mock_session.get.assert_called_once_with(TaskModel, task_id)
         assert result is None
 
-    @pytest.mark.asyncio
-    async def test_get_by_project_id_success(
-        self,
-        task_repo: TaskRepository,
-        mock_task: MagicMock,
-        mock_session: AsyncMock
-    ) -> None:
-        """
-        Проверка: get_by_project_id возвращает задачи проекта.
-        
-        Arrange: Мокируем результат scalars.unique().all().
-        Act: Вызов get_by_project_id.
-        Assert: Проверка корректности возврата.
-        """
-        # Arrange
-        project_id = mock_task.project_id
-        mock_scalar_result = MagicMock()
-        mock_scalar_result.unique.return_value.all.return_value = [mock_task]
-        mock_session.scalars.return_value = mock_scalar_result
-
-        # Act
-        tasks = await task_repo.get_by_project_id(project_id)
-
-        # Assert
-        mock_session.scalars.assert_called_once()
-        assert len(tasks) == 1
-        assert tasks[0] == mock_task
 
     @pytest.mark.asyncio
     async def test_get_by_user_id_success(

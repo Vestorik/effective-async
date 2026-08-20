@@ -1,7 +1,66 @@
-FROM python:3.14-slim
+# ==============================================================================
+# Этап 1: Сборщик (Builder)
+# Используем официальный образ для корректной сборки C-расширений (asyncpg)
+# ==============================================================================
+FROM python:3.14-slim AS builder
+
+# Устанавливаем системные зависимости, необходимые для сборки C-extensions
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-COPY requirements.txt /app/
+# Копируем requirements.txt для установки зависимостей
+COPY requirements.txt ./
 
+# Создаем виртуальное окружение
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
+# Устанавливаем зависимости.
+# Используем --no-cache-dir для экономии места и --no-deps для ускорения,
+# так как requirements.txt уже содержит все транзитивные зависимости.
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Копируем исходный код приложения
+COPY app ./app
+
+# ==============================================================================
+# Этап 2: Продакшен (Production)
+# Минималистичный образ без компиляторов
+# ==============================================================================
+FROM python:3.14-slim AS production
+
+WORKDIR /app
+
+# Копируем виртуальное окружение из builder
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Создаем пользователя для запуска приложения (безопасность)
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Копируем исходный код приложения
+COPY app ./app
+
+# Создаем директорию для логов
+RUN mkdir -p /app/logging && chmod -R 777 /app/logging
+
+# Переключаемся на обычного пользователя
+USER appuser
+
+# Открываем порт
+EXPOSE 8000
+
+# Health check. Проверяем доступность API.
+# Убедитесь, что эндпоинт /docs доступен в prod, либо замените на /health
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs')" || exit 1
+
+# Запуск приложения
+# Секреты (.env) не копируются в образ! 
+# Они должны передаваться через Docker Compose, Kubernetes Secrets или монтироваться томом
+CMD ["uvicorn", "app.src.base.main:MAIN_APP", "--host", "0.0.0.0", "--port", "8000"]

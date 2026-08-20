@@ -37,8 +37,6 @@ class TimeEventSheme(BaseModel):
     model_config = {"from_attributes": True}
 
 
-
-
 class UserBaseSheme(BaseModelSheme):
     """
     Базовая схема пользователя для входа/создания/обновления.
@@ -77,7 +75,6 @@ class UserUpdateSheme(BaseModelSheme):
     team_id: Optional[UUID] = Field(default=None, description="Внешний ключ на команду (необязательный).")
 
 
-
 class UserSheme(UserBaseSheme):
     """
     Схема пользователя для входа/создания (с исключением пароля из выхода).
@@ -96,6 +93,11 @@ class UserOutSheme(BaseModelSheme):
     Не содержит пароля. Не содержит team_id (можно добавить при необходимости).
     Готова к отправке клиенту.
     """
+    model_config = {
+        "from_attributes": True,     # ORM-совместимость (aiosqlite/asyncpg/SQLAlchemy)
+        "extra": "allow",            # Запрет лишних полей во входных данных
+        "validate_assignment": True   # Валидация при изменении поля после создания
+    }
 
     username: str
     email: EmailStr
@@ -177,6 +179,15 @@ class ProjectSchema(BaseModelSheme):
     name: str
     description: Optional[str] = Field(default=None, description="Описание проекта.")
 
+class ProjectSchemaWithID(ProjectSchema):
+    """
+    Схема проекта для выхода.
+
+    Не содержит вложенных связей (teams, tasks) — для избежания рекурсии.
+    """
+
+    id: UUID
+
 
 class ProjectCreate(BaseModel):
     """Входная схема создания проекта."""
@@ -219,7 +230,11 @@ class TaskOutSheme(BaseModelSheme):
     Не содержит executors/parent/sub_tasks для избежания рекурсии.
     Можно добавить в отдельные схемы (TaskWithExecutorsSheme, TaskWithSubTasksSheme).
     """
-
+    model_config = {
+        "from_attributes": True,     # ORM-совместимость (aiosqlite/asyncpg/SQLAlchemy)
+        "extra": "allow",            # Запрет лишних полей во входных данных
+        "validate_assignment": True   # Валидация при изменении поля после создания
+    }
     name: str
     description: Optional[str] = Field(default=None, description="Описание задачи.")
     project_id: Optional[UUID] = Field(default=None, description="Идентификатор проекта (если задача привязана к проекту).")
@@ -255,6 +270,7 @@ class MeetingSheme(TimeEventSheme):
 
     Наследует start_datetime и end_datetime от TimeEventSheme.
     """
+    name: str
     pass
 
 
@@ -265,6 +281,7 @@ class EventSheme(TimeEventSheme):
 
     Наследует start_datetime и end_datetime от TimeEventSheme.
     """
+    name: str
     pass
 
     
@@ -319,19 +336,7 @@ class TaskExecutorOutSheme(BaseModelSheme):
     estimate: Optional[int] = Field(default=None, description="Оценка исполнителя задачи")
     # Добавляем имя пользователя для отображения в UI без дополнительных запросов
     username: Optional[str] = Field(default=None, description="Имя пользователя")
-    
-    model_config = {"from_attributes": True}
 
-class TaskOutSheme(BaseModelSheme):
-    """
-    Схема задачи для выхода.
-    """
-    name: str
-    description: Optional[str] = Field(default=None)
-    project_id: Optional[UUID] = Field(default=None)
-    parent_id: Optional[UUID] = Field(default=None)
-    status: Optional[str] = Field(default=None) # Предполагаем наличие статуса
-    
     model_config = {"from_attributes": True}
 
 class TaskWithExecutorsOutSheme(TaskOutSheme):
@@ -340,6 +345,7 @@ class TaskWithExecutorsOutSheme(TaskOutSheme):
     Используется в выводе проектов.
     """
     executors: List[TaskExecutorOutSheme] = Field(default_factory=list)
+    created_at: datetime
 
 class ProjectOutSchema(BaseModelSheme):
     """

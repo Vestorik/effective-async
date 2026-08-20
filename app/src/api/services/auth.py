@@ -12,12 +12,13 @@
 - Репозитории создаются в handlers.py через uow.users, uow.teams и т.д.
 - Убраны явные commit/rollback — они управляются в UnitOfWork.__aexit__().
 """
+from functools import partial
 
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from logging import getLogger
-from typing import Annotated
+from typing import Annotated, cast, List
 from uuid import UUID
 
 from fastapi import Depends, Request, status
@@ -357,26 +358,29 @@ class RoleType(Enum):
     ANY = "ANY"
 
 
-def require_permissions(
-    # permissions: list[Permission] | None, // Реализовать в будущем
-    role: list[RoleType] | None = None,
-) -> Callable:
+class RequirePermissions:
+    def __init__(self, role: list["RoleType"] | None = None):
+        # Если ролей нет — разрешаем всем (ANY)
+        if role is None:
+            self.allowed_values = [RoleType.ANY.value]
+        else:
+            self.allowed_values = [r.value for r in role]
 
-    if role is None:
-        role = [
-            RoleType.ANY,
-        ]
-
-    async def check_permissions(
-        user_model: Annotated[UserModel, Depends(get_current_user_dep)],
+    async def __call__(
+        self,
+        user_model: Annotated["UserModel", Depends(get_current_user_dep)],
     ) -> UUID:
         user_role = user_model.role
-        if user_role not in [r.value for r in role]:
+
+        # Случай ANY: если ANY есть в списке — пропускаем
+        if RoleType.ANY.value in self.allowed_values:
+            return user_model.id  # ty: ignore[invalid-return-type]
+
+        # Обычная проверка
+        if user_role != RoleType.ADMIN.value or user_role not in self.allowed_values:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
+                status_code=403,
                 detail="Недостаточно прав для доступа",
             )
 
-        return user_model.id  # ty:ignore[invalid-return-type]
-
-    return check_permissions
+        return user_model.id  # ty: ignore[invalid-return-type]

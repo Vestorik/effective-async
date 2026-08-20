@@ -86,7 +86,6 @@ class EventService(BaseService):
             description=description,
             start_datetime=start_datetime,
             end_datetime=end_datetime,
-            user_id=user_id,
         )
         await event_repo.create(event)
 
@@ -152,19 +151,18 @@ class EventService(BaseService):
             event.start_datetime = start_datetime
         if end_datetime is not None:
             event.end_datetime = end_datetime
-        event.updated_at = datetime.now(timezone.utc)
         
-        if end_datetime and start_datetime:        
-            if end_datetime <= start_datetime:
-                raise ValueError(
-                    f"end_datetime ({end_datetime}) должен быть строго после "
-                    f"start_datetime ({start_datetime})"
-                )
-        else:
+        # Валидация временных интервалов: используем новые значения, если они переданы, иначе старые
+        current_start = start_datetime if start_datetime is not None else event.start_datetime
+        current_end = end_datetime if end_datetime is not None else event.end_datetime
+
+        if current_end <= current_start:
             raise ValueError(
-                f"end_datetime ({end_datetime}) должен быть строго после "
-                f"start_datetime ({start_datetime})"
+                f"end_datetime ({current_end}) должен быть строго после "
+                f"start_datetime ({current_start})"
             )
+        
+        event.updated_at = datetime.now(timezone.utc)
 
         await event_repo.update(event)
         return EventSheme.model_validate(event)
@@ -244,7 +242,6 @@ class MeetingService(BaseService):
             description=description,
             start_datetime=start_datetime,
             end_datetime=end_datetime,
-            team_id=team_id,
         )
         await meeting_repo.create(meeting)
 

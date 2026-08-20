@@ -41,6 +41,35 @@ services:
       retries: 5
       start_period: 5s
 
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/dockerfile
+    container_name: effect_mobile_app
+    restart: unless-stopped
+    ports:
+      - "${SERVER_PORT:-8000}:8000"
+    volumes:
+
+      - ../app:/app/app
+      - ../deploy/.env:/app/deploy/.env
+      - app_logging:/app/logging
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/docs')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    # Если нужно использовать конкретный .env файл для переменных окружения
+    env_file:
+      - ../deploy/.env
+
 volumes:
   postgres_data:
   redis_data:
+  app_logging:

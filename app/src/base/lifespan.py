@@ -1,11 +1,14 @@
-from fastapi import FastAPI, APIRouter
 from contextlib import asynccontextmanager
-from app.src.api.main import api_routers
-from app.src.api.admin.admin import SQLAdminViewSet
-from fastapi_swagger_ui_theme import setup_swagger_ui_theme
-from app.src.dal.main import get_data_manager
-from app.src.base.config import _GLOBAL_DATABASE_MANAGER
 from logging import getLogger
+
+from fastapi import APIRouter, FastAPI
+from fastapi_swagger_ui_theme import setup_swagger_ui_theme
+
+from app.src.api.admin.admin import SQLAdminViewSet
+from app.src.api.main import api_routers
+from app.src.base.config import _GLOBAL_DATABASE_MANAGER
+from app.src.dal.main import get_data_manager, DataManager
+
 logger = getLogger(__name__)
 
 __all_routers: list[APIRouter] = api_routers
@@ -35,7 +38,8 @@ async def startapp(app: FastAPI):
 
 async def shutdown(app: FastAPI):
     if hasattr(app.state, "data_manager"):
-        await app.state.data_manager.close()
+        data_manager: DataManager = app.state.data_manager
+        await data_manager.close()
 
 
 @asynccontextmanager

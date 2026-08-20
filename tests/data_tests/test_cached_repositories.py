@@ -113,6 +113,7 @@ class TestCachedUnitOfWork:
         uow.task_executors = MagicMock()
         uow.meetings = MagicMock()
         uow.events = MagicMock()
+        uow.comments = MagicMock()
         db_manager.uow = MagicMock(return_value=uow)
         return db_manager
 

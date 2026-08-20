@@ -120,6 +120,7 @@ class DashboardService(BaseService):
                     name=task.name,
                     description=task.description,
                     executors=executors,
+                    created_at=task.created_at
                 )
                 tasks.append(task_schema)
             
@@ -152,6 +153,7 @@ class DashboardService(BaseService):
                     name=task.name,
                     description=task.description,
                     executors=executors,
+                    created_at=task.created_at
                 )
                 tasks.append(task_schema)
             

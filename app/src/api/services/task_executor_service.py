@@ -75,7 +75,7 @@ class TaskExecutorService(BaseService):
         if not task:
             raise TaskNotFound()
 
-        user = await task_executor_repo.session.get(UserModel, user_id)
+        user = await task_executor_repo.get_by_id(user_id)
         if not user:
             raise UserNotFound()
 

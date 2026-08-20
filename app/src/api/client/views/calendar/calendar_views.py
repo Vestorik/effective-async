@@ -50,7 +50,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from app.src.api.utils.api_utils import DependsDataManager
-from app.src.api.services.auth import RoleType, require_permissions
+from app.src.api.services.auth import RoleType, RequirePermissions
+from app.src.dal.database.models import MeetingModel, EventModel
 from app.src.api.client.views._views_base import templates, prefix
 
 logger = getLogger(__name__)
@@ -173,7 +174,7 @@ async def calendar_view(
     current_user_id: Annotated[
         UUID,
         Depends(
-            require_permissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
+            RequirePermissions(role=[RoleType.USER, RoleType.MANAGER, RoleType.ADMIN])
         ),
     ],
     year: int | None = None,
